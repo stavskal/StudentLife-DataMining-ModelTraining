@@ -1,4 +1,4 @@
-import csv,codecs
+import csv,codecs,os
 from pymongo import MongoClient
 
 
@@ -7,16 +7,15 @@ global_db = None
 global_coll = None
 
 client = MongoClient()
-db = client.test1
+db = client.AppUsage
 
 
-def dbSetup():	
+def dbSetup(csvfile):	
 	i=0
-	csvfile='running_app_u00.csv'
 	with open(csvfile,'rb') as inCsv:
 		parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
 		for record in parsed:
-			string_record=dict([(str(k), v) for k, v in record.items()])
+			#string_record=dict([(str(k), v) for k, v in record.items()])
 			add_record_to_mongo(record,i)
 			i= i+1
 			
@@ -28,14 +27,21 @@ def add_record_to_mongo(record,i):
 	
 	print i
 	# Now let's insert
-	db.test1.insert_one(record)
+	db.logs.insert_one(record)
 
 
 
 
 
 def main():
-	dbSetup()
+
+	#current directory script being run
+	directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/app_usage'
+	
+	for filename in os.listdir(directory):
+		filename= directory +'/'+ filename
+
+		dbSetup(filename)
 
 
 if __name__ == '__main__':
