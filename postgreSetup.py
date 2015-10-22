@@ -2,23 +2,38 @@ import psycopg2,csv,os,sys,getopt
 
 
 #Standard SQL queries to be used in inserting data
-create = """CREATE TABLE appusage (id SERIAL PRIMARY KEY, device VARCHAR(100), time_stamp INT, running_task_base VARCHAR(100), running_task_id INT);"""
+create1 = """CREATE TABLE appusage (uid VARCHAR(3), device VARCHAR(100), time_stamp INT, running_task_base VARCHAR(100), running_task_id INT);"""
 
-insert= """INSERT INTO appusage (device,time_stamp,running_task_base,running_task_id) VALUES (%s,%s,%s,%s);  """
+create2 = """CREATE TABLE users ( device VARCHAR(100) PRIMARY KEY);"""
 
-drop = """DROP TABLE appusage"""
+insert= """INSERT INTO appusage (uid,device,time_stamp,running_task_base,running_task_id) VALUES (%s,%s,%s,%s,%s);  """
+
+insert1= """INSERT INTO users (device) VALUES (%s);  """
+
+drop = """DROP TABLE appusage;"""
 
 query= """ SELECT * FROM appusage WHERE id= %s; """
 
+query1= """ SELECT * FROM users; """
 
-
-
-#function for opening csv files and inserting in DB
-def dbInsertData(csvfile,c,cur):
+def dbInsertUsers(csvfile,cur):
 	with open(csvfile,'rb') as inCsv:
 			parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
 			for record in parsed:
-				data=(str(record['device']),str(record['timestamp']),str(record['RUNNING_TASKS_baseActivity_mPackage']),str(record['RUNNING_TASKS_id']))
+				data=[record['device']]
+				cur.execute(insert1,data)
+				break;	
+
+
+#function for opening csv files and inserting in DB
+def dbInsertData(csvfile,cur):
+	a=csvfile.split('_')
+	b=a[3]
+	uid= b[0:3] #uid is in format 'uXX' with XX E [0,59]
+	with open(csvfile,'rb') as inCsv:
+			parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
+			for record in parsed:
+				data=(uid,str(record['device']),str(record['timestamp']),str(record['RUNNING_TASKS_baseActivity_mPackage']),str(record['RUNNING_TASKS_id']))
 				cur.execute(insert,data)
 
 
@@ -34,28 +49,41 @@ def main(argv):
 		print('Error %s' % err)
 		exit()
 
-	#if user requested database creation the arg is '-i'
+	#if user requested database creation the arg is '-insert'
 	if sys.argv[1]=='-insert':
-		cur.execute(create)
-		print('Table created')
+		cur.execute(create2)
+		cur.execute(create1)
+
+		print('Tables created')
 
 		#setting directory to load app_usage information
 		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/app_usage'
 
 		#inserting all files to database
 		for filename in os.listdir(directory):
-			filename= directory +'/'+ filename
-			dbInsertData(filename,'app_usage',cur)
+			filename = directory +'/'+ filename
+
+			dbInsertUsers(filename,cur)
+			dbInsertData(filename,cur)
 
 		print('Done with app_usage')
+
+		cur.execute(query1)
+		records = cur.fetchall()
+		for device in records:
+			print device
+
 		con.commit()
 		con.close()
 
 
 	elif sys.argv[1]=='-drop':
 		
-		cur.execute(drop)
-		print('Table Deleted')
+		cur.execute("DROP TABLE appusage")
+		cur.execute("DROP TABLE users")
+		
+		print('Tables Deleted')
+
 		con.commit()
 		con.close()
 
