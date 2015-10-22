@@ -2,9 +2,9 @@ import json,csv,sys,os,psycopg2
 
 #-----------------------------------------------------------------------------------------------
 #This script is intended to create user specific tables (postgreSQL) containing their reported
-#stress level alongside with the time they did so
-# table name: uXX , XX E [0,59]
-# each row (timestamp,stress_level)
+#stress level alongside with the time they did so.
+# table name: uXX , XX E [0,59] eg. 'u02', 'u32'
+# each row: (timestamp,stress_level), stressed/not stressed = 1/0 
 #-----------------------------------------------------------------------------------------------
 
 
@@ -30,6 +30,8 @@ insert= """INSERT INTO stress (u00,u01,u02,u03,u04,u05,u07,u08,u09,u10,u12,u13,u
 
 drop = "DROP TABLE {0};"
 #end of paranoia
+
+
 
 def main(argv):
 
@@ -66,7 +68,13 @@ def main(argv):
 			for i in range(0,len(fullfile)):
 				#defending against dirty data
 				if 'level' in fullfile[i]:
-					insertQ=insert1.format(uid, fullfile[i]['resp_time'], fullfile[i]['level'])
+					#converting from scale 1-5 to binay 0/1 - not stressed/stressed
+					if int(fullfile[i]['level'])<4:
+						stress=1
+					else:
+						stress=0>
+
+					insertQ=insert1.format(uid, fullfile[i]['resp_time'], stress)
 					cur.execute(insertQ)
 
 		con.commit()
