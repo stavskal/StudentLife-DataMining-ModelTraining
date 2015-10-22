@@ -1,6 +1,15 @@
 import json,csv,sys,os,psycopg2
 
-#I had to do it that way, sorry
+#-----------------------------------------------------------------------------------------------
+#This script is intended to create user specific tables (postgreSQL) containing their reported
+#stress level alongside with the time they did so
+# table name: uXX , XX E [0,59]
+# each row (timestamp,stress_level)
+#-----------------------------------------------------------------------------------------------
+
+
+
+#I had to do it that way, sorry (apparently I didn't)
 create = """CREATE TABLE stress 
 			 ( u00 INT,u01 INT,u02 INT,u03 INT,u04 INT,u05 INT,u07 INT,u08 INT,u09 INT,
 			 	u10 INT,u12 INT,u13 INT,u14 INT,u15 INT,u16 INT,u17 INT,u18 INT,u19 INT,
@@ -24,7 +33,6 @@ drop = "DROP TABLE {0};"
 
 def main(argv):
 
-
 	#connecting to database
 	try:
 		con = psycopg2.connect(database='dataset', user='tabrianos')
@@ -36,6 +44,7 @@ def main(argv):
 
 
 
+	#depending on what user chose, either inserts, or drops tables
 	if sys.argv[1]=='-insert':
 		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/EMA/response/Stress'
 
@@ -63,7 +72,7 @@ def main(argv):
 		con.commit()
 		con.close()
 
-		#destroying all user tables
+	#destroying all user tables
 	elif sys.argv[1]=='-drop':
 		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/EMA/response/Stress'
 		for filename in os.listdir(directory):
@@ -75,14 +84,6 @@ def main(argv):
 
 		con.commit()
 		con.close()
-
-		#rint(create1.format(uid,'a','b'))
-		#for i in range(0,len(fullfile)):
-
-
-
-
-
 
 
 
