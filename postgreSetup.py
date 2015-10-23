@@ -1,5 +1,8 @@
 import psycopg2,csv,os,sys,getopt
 
+#---------------------------------------------!!!!!!!!!!!------------------------------------------
+#---------------------------------------------!!!!!!!!!!!------------------------------------------
+
 
 #Standard SQL queries to be used in inserting data
 create1 = """CREATE TABLE appusage (uid VARCHAR(3), device VARCHAR(100), time_stamp INT, running_task_base VARCHAR(100), running_task_id INT);"""
@@ -16,6 +19,11 @@ query= """ SELECT * FROM appusage WHERE id= %s; """
 
 query1= """ SELECT * FROM users; """
 
+#---------------------------------------------!!!!!!!!!!!------------------------------------------
+#---------------------------------------------!!!!!!!!!!!------------------------------------------
+
+
+#inserts users (csv format) in db
 def dbInsertUsers(csvfile,cur):
 	with open(csvfile,'rb') as inCsv:
 			parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
@@ -25,7 +33,7 @@ def dbInsertUsers(csvfile,cur):
 				break;	
 
 
-#function for opening csv files and inserting in DB
+#function for opening csv files and inserting in DB (user INFO)
 def dbInsertData(csvfile,cur):
 	a=csvfile.split('_')
 	b=a[3]
@@ -36,7 +44,11 @@ def dbInsertData(csvfile,cur):
 				data=(uid,str(record['device']),str(record['timestamp']),str(record['RUNNING_TASKS_baseActivity_mPackage']),str(record['RUNNING_TASKS_id']))
 				cur.execute(insert,data)
 
-
+#action series of following script:
+# 1)connect to database
+# 2) check whether user requested insert/drop
+# if insert: all files in 'app_usage' folder are scanned and parsed
+# if drop: tables destroyed
 def main(argv):
 	global create
 	con = None
@@ -59,7 +71,7 @@ def main(argv):
 		#setting directory to load app_usage information
 		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/app_usage'
 
-		#inserting all files to database
+		#inserting all files to database from given directory
 		for filename in os.listdir(directory):
 			filename = directory +'/'+ filename
 
@@ -68,15 +80,12 @@ def main(argv):
 
 		print('Done with app_usage')
 
-		cur.execute(query1)
-		records = cur.fetchall()
-		for device in records:
-			print device
 
+		#commiting and closing connection to DB
 		con.commit()
 		con.close()
 
-
+	#if user selected '-drop' tables are deleted
 	elif sys.argv[1]=='-drop':
 		
 		cur.execute("DROP TABLE appusage")
@@ -86,6 +95,8 @@ def main(argv):
 
 		con.commit()
 		con.close()
+
+
 
 
 if __name__ == '__main__':
