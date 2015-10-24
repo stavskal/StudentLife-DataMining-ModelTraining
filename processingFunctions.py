@@ -11,7 +11,7 @@ hour = 3600
 day = 86400
 weekSec = 604000
 
-
+#---------------------------------------------------------------------------------------
 #converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
 def unixTimeConv(timestamp):
 	newTime = str(datetime.datetime.fromtimestamp(int(timestamp)))
@@ -20,6 +20,8 @@ def unixTimeConv(timestamp):
 	hour,minutes,sec = timeT.split(':')
 	return (year,month,day,hour,minutes,sec)
 
+
+#---------------------------------------------------------------------------------------
 #counts occurence of each app for given user 'uid' during experiment
 def countAppOccur(cur,uid):
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
@@ -30,15 +32,16 @@ def countAppOccur(cur,uid):
 	return records
 
 
-#computes application usage frequency, number of unique apps per timeWin (hour,day,week)
+#---------------------------------------------------------------------------------------
+#computes application usage frequency and number of unique apps per uid per timeWin (hour, day, week)
 def computeAppStats(cur,uid,timeWin):
 	appOccur = countAppOccur(cur,uid)
 
-	#selecting 
+	#selecting start and end date of data acquisition
 	cur.execute("""SELECT min(time_stamp),max(time_stamp) FROM appusage WHERE uid = %s""",[uid])
 	records = cur.fetchall()
 
-	#tStart: timestamp logging started, tEnd: timestamp loggind ended , day: one day in seconds
+	#tStart: timestamp logging started, tEnd: timestamp loggind ended
 	tStart , tEnd = records[0][0], records[0][1]
 	durationTotal = tEnd - tStart
 
@@ -47,10 +50,10 @@ def computeAppStats(cur,uid,timeWin):
 	while(tStart+timeWin<tEnd):
 		tAfter = tStart + timeWin
 		cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp > %s AND time_stamp < %s ; """, [uid,tStart,tAfter] )
-		print('----------------------- DAY {0}---------------------------------'.format(i))
+		print('----------------------- Epoch {0}---------------------------------'.format(i))
 		records= Counter( cur.fetchall() )
 
-		#number of every days unique applications 
+		#number of every days' unique applications 
 		dailyUniqueApps = len(records.keys())
 		
 		# dailyUsageFrequency:  number of times today / total times
@@ -64,15 +67,46 @@ def computeAppStats(cur,uid,timeWin):
 		i=i+1
 		
 
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+occurences=[]
+def appTimeIntervals(cur,uid):
+	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
 
+	#unique holds the total number of unique applications
+	allKeys = dict(Counter( cur.fetchall())).keys() 
+	unique = len(allKeys)
+
+	cur.execute("""SELECT running_task_id,time_stamp  FROM appusage WHERE uid = %s ; """, [uid] )
+
+	records = cur.fetchall()
+
+	print(allKeys[1][0])
+	
+	#not tested yet
+	for k in range(1,unique):
+		occurences[k].append( [item for item in records if allKeys[k][0] in item])
+		print(occurences[k])
+		
+
+
+
+	
+
+
+#testing
 con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
-computeAppStats(cur,'u00',day)
+#computeAppStats(cur,'u00',day)
+appTimeIntervals(cur,'u00')
+#countAppOccur(cur,'u01')
+
 
 
 #[DONE]: function that produces labels [stressed/not stressed] from surveys [DONE]
-#TODO: function that computes application usage statistics in time window (day/week) (frequency, mean, dev)
+#[DONE]: function that computes application usage statistics in time window (day/week) (frequency, mean, dev)
 
+#TODO: function that computes time intervals between consequent application usages
 #TODO: function that computes sms+calls statistical features in time window (how many sms, how many people)
 #NOTE: some call+sms logs do not contain any data (maybe corrupted download?)
 
