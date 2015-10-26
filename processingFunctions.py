@@ -20,6 +20,8 @@ def unixTimeConv(timestamp):
 	hour,minutes,sec = timeT.split(':')
 	return (year,month,day,hour,minutes,sec)
 
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------
 #counts occurence of each app for given user 'uid' during experiment
@@ -31,6 +33,8 @@ def countAppOccur(cur,uid):
 	
 	return records
 
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------
 #computes application usage frequency and number of unique apps per uid per timeWin (hour, day, week)
@@ -65,6 +69,10 @@ def computeAppStats(cur,uid,timeWin):
 		tAfter = tAfter + timeWin
 
 		i=i+1
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+
+
 		
 
 #---------------------------------------------------------------------------------------
@@ -74,7 +82,6 @@ def computeAppStats(cur,uid,timeWin):
 #They have not been included in returned list
 def appTimeIntervals(cur,uid):
 	timeInterval=[]
-	timeIntervalTEST=[]
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
 
 	#allKeys holds all the running_task_ids as keys of dict
@@ -96,33 +103,50 @@ def appTimeIntervals(cur,uid):
 
 		timeInterval.append([])
 		for use in range(0,len(sortedTimestamp)-1):
-			#1200 is sampling period, ommiting background apps which run 24/7
-			if sortedTimestamp[use+1][1] - sortedTimestamp[use][1] != 1200: 
-				timeInterval[k].append(sortedTimestamp[use+1][1] - sortedTimestamp[use][1]) 
-			
+			timeInterval[k].append(sortedTimestamp[use+1][1] - sortedTimestamp[use][1]) 
+			print(timeInterval)
 	#timeIntervals is a list of lists, each row contains consequent uses of signle application (also a list)
 	return timeInterval
 
+#---------------------------------------------------------------------------------------
 
 
-	
+
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#returns True if screen was on at given period, false otherwise
+def checkScreenOn(cur,uid,time):
+	uid=uid +'dark'
+	cur.execute("SELECT * FROM {0} WHERE timeStart <= {1} AND timeStop >={2} ; ".format(uid,time,time) )
+	records = cur.fetchall()
+
+	if not records:
+		return(False)
+	else:
+		return(True)
+
+
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+
 
 
 #testing
 con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
 #computeAppStats(cur,'u00',day)
-appTimeIntervals(cur,'u00')
+#appTimeIntervals(cur,'u00')
 #countAppOccur(cur,'u01')
-
+num = 13643000
+checkScreenOn(cur,'u00',num)
 
 
 #[DONE]: function that produces labels [stressed/not stressed] from surveys [DONE]
 #[DONE]: function that computes application usage statistics in time window (day/week) (frequency, mean, dev)
 
 #TODO: function that computes time intervals between consequent application usages
-#NOTE: some applications only occur periodically = no useful information, only keep non periodical uses
-
+#NOTE: many applications remain active for long periods in the background
+#TOADD:  cross-validate with screen-on status to filter out background apps
 
 #TODO: function that computes sms+calls statistical features in time window (how many sms, how many people)
 #NOTE: some call+sms logs do not contain any data (maybe corrupted download?)
