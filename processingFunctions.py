@@ -69,25 +69,39 @@ def computeAppStats(cur,uid,timeWin):
 
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
-occurences=[]
+#calculates time between subsequent application usages
+#IMPORTANT: many applications are running in the background during all sampling times (every 1200sec)
+#They have not been included in returned list
 def appTimeIntervals(cur,uid):
+	timeInterval=[]
+	timeIntervalTEST=[]
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
 
-	#unique holds the total number of unique applications
+	#allKeys holds all the running_task_ids as keys of dict
 	allKeys = dict(Counter( cur.fetchall())).keys() 
+	#unique holds the total number of unique applications
 	unique = len(allKeys)
 
 	cur.execute("""SELECT running_task_id,time_stamp  FROM appusage WHERE uid = %s ; """, [uid] )
-
 	records = cur.fetchall()
 
 	print(allKeys[1][0])
 	
 	#not tested yet
-	for k in range(1,unique):
-		occurences[k].append( [item for item in records if allKeys[k][0] in item])
-		print(occurences[k])
-		
+	for k in range(0,unique):
+		#singleAppOccur holds all usages+time of one application (each iter) for given user
+		singleAppOccur = [item for item in records if allKeys[k][0] in item]
+		#sorting app usages according to time in order to compute intervals between uses
+		sortedTimestamp = sorted(singleAppOccur, key=lambda x:x[1] )
+
+		timeInterval.append([])
+		for use in range(0,len(sortedTimestamp)-1):
+			#1200 is sampling period, ommiting background apps which run 24/7
+			if sortedTimestamp[use+1][1] - sortedTimestamp[use][1] != 1200: 
+				timeInterval[k].append(sortedTimestamp[use+1][1] - sortedTimestamp[use][1]) 
+			
+	#timeIntervals is a list of lists, each row contains consequent uses of signle application (also a list)
+	return timeInterval
 
 
 
@@ -107,6 +121,9 @@ appTimeIntervals(cur,'u00')
 #[DONE]: function that computes application usage statistics in time window (day/week) (frequency, mean, dev)
 
 #TODO: function that computes time intervals between consequent application usages
+#NOTE: some applications only occur periodically = no useful information, only keep non periodical uses
+
+
 #TODO: function that computes sms+calls statistical features in time window (how many sms, how many people)
 #NOTE: some call+sms logs do not contain any data (maybe corrupted download?)
 
