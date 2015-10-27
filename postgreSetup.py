@@ -1,5 +1,5 @@
 import psycopg2,csv,os,sys,getopt
-
+from processingFunctions import checkScreenOn
 #---------------------------------------------!!!!!!!!!!!------------------------------------------
 #---------------------------------------------!!!!!!!!!!!------------------------------------------
 
@@ -34,6 +34,7 @@ def dbInsertUsers(csvfile,cur):
 
 
 #function for opening csv files and inserting in DB (user INFO)
+#ony inserts applications that were user initiated, not background
 def dbInsertData(csvfile,cur):
 	a=csvfile.split('_')
 	b=a[3]
@@ -41,8 +42,9 @@ def dbInsertData(csvfile,cur):
 	with open(csvfile,'rb') as inCsv:
 			parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
 			for record in parsed:
-				data=(uid,str(record['device']),str(record['timestamp']),str(record['RUNNING_TASKS_baseActivity_mPackage']),str(record['RUNNING_TASKS_id']))
-				cur.execute(insert,data)
+				if checkScreenOn(cur,uid,record['timestamp']):
+					data=(uid,str(record['device']),str(record['timestamp']),str(record['RUNNING_TASKS_baseActivity_mPackage']),str(record['RUNNING_TASKS_id']))
+					cur.execute(insert,data)
 
 #action series of following script:
 # 1)connect to database
