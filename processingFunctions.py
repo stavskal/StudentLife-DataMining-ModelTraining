@@ -87,7 +87,7 @@ def computeAppStats(cur,uid,timeWin):
 		usageFrequency= {k: float(records[k])*100/float(appOccur[k]) for k in appOccur.viewkeys() & records.viewkeys() }
 		
 
-		appStats.append(dailyUsageFrequency)
+		appStats.append(usageFrequency)
 		
 		tStart = tStart + timeWin
 		tAfter = tAfter + timeWin
@@ -153,12 +153,17 @@ def checkScreenOn(cur,uid,time):
 
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
-
+# retrieves stress labels for user 'uid' and returns a list with their corresponding timestamps
+def loadStressLabels(cur,uid):
+	cur.execute("SELECT time_stamp,stress_level  FROM {0} ".format(uid) )
+	records = cur.fetchall()
+	return records
 
 
 #testing
-#con = psycopg2.connect(database='dataset', user='tabrianos')
-#cur = con.cursor()
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
+loadStressLabels(cur,'u01')
 #a=computeAppStats(cur,'u09',day)
 #print(a[0][2])
 #print(a[1][65])
