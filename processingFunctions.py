@@ -13,7 +13,7 @@ weekSec = 604000
 
 
 #---------------------------------------------------------------------------------------
-#converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
+# converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
 def unixTimeConv(timestamp):
 	newTime = str(datetime.datetime.fromtimestamp(int(timestamp)))
 	yearDate,timeT = newTime.split(' ')
@@ -22,7 +22,7 @@ def unixTimeConv(timestamp):
 	return (year,month,day,hour,minutes,sec)
 
 #----------------------------------------------------------------------------------------
-#converts timestamp to epoch (day,evening,night) pretty straightforward right?
+# converts timestamp to epoch (day,evening,night) pretty straightforward right?
 def epochCalc(timestamp):
 	year,month,day,hour,minutes,sec = unixTimeConv(timestamp)
 	hour=int(hour)
@@ -36,7 +36,7 @@ def epochCalc(timestamp):
 	return epoch
 
 #---------------------------------------------------------------------------------------
-#counts occurence of each app for given user 'uid' during experiment
+# counts occurence of each app for given user 'uid' during experiment
 def countAppOccur(cur,uid):
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
 
@@ -47,7 +47,7 @@ def countAppOccur(cur,uid):
 
 
 #---------------------------------------------------------------------------------------
-#computes application usage frequency and number of unique apps per uid per timeWin (hour, day, week)
+# computes application usage frequency and number of unique apps per uid per timeWin (hour, day, week)
 def computeAppStats(cur,uid,timeWin):
 	appOccur = countAppOccur(cur,uid)
 	appStats=[]
@@ -67,27 +67,25 @@ def computeAppStats(cur,uid,timeWin):
 
 
 	i=0
-	#iterating until we reach the end of sampling period. In every iteration only the data contained in
-	#given time window are selected from database and statistical processing is applied onto them
-	#statistic computed is the daily usage frequency(if today used 10 times, 100 total then 10% is returned)
-	#a list of dictionaries is returned, each cell containing a dictionary (key:task_id, value: freq) for a time period 
+	# iterating until we reach the end of sampling period. In every iteration only the data contained in
+	# given time window are selected from database.
+	# statistic computed is the daily usage frequency(if today used 10 times, 100 total then 0.1 (10%) is returned)
+	# a list of dictionaries is returned, each cell containing a dictionary (key:task_id, value: freq) for a time period 
 	while(tStart+timeWin<tEnd):
 		tAfter = tStart + timeWin
 		cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp > %s AND time_stamp < %s ; """, [uid,tStart,tAfter] )
-		#print('----------------------- Epoch {0}---------------------------------'.format(i))
 		records= Counter( cur.fetchall() )
 
 		#transforming keys to be in readable format
 		for k in records.keys():
 			records[k[0]] = records.pop(k)
 
-		#number of every days' unique applications 
-		dailyUniqueApps = len(records.keys())
+		# number of unique applications 
+		uniqueApps = len(records.keys())
 		
-		# dailyUsageFrequency:  number of times today / total times
-		dailyUsageFrequency= {k: float(records[k])*100/float(appOccur[k]) for k in appOccur.viewkeys() & records.viewkeys() }
-		#print(dailyUsageFrequency)
-		#print('--------------------------------------------------------')
+		# usageFrequency:  number of times in timeWin / total times
+		usageFrequency= {k: float(records[k])*100/float(appOccur[k]) for k in appOccur.viewkeys() & records.viewkeys() }
+		
 
 		appStats.append(dailyUsageFrequency)
 		
@@ -103,9 +101,9 @@ def computeAppStats(cur,uid,timeWin):
 		
 
 #---------------------------------------------------------------------------------------
-#calculates time between subsequent application usages
-#IMPORTANT: many applications are running in the background during all sampling times (every 1200sec)
-#They have not been included in returned list, they were cross-checked with phone screen data
+# calculates time between subsequent application usages
+# IMPORTANT: many applications are running in the background during all sampling times (every 1200sec)
+# They have not been included in returned list, they were cross-checked with phone screen data
 def appTimeIntervals(cur,uid):
 	timeInterval=[]
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
@@ -140,7 +138,7 @@ def appTimeIntervals(cur,uid):
 
 
 #---------------------------------------------------------------------------------------
-#returns True if screen was On at given time, false otherwise
+# returns True if screen was On at given time, false otherwise
 def checkScreenOn(cur,uid,time):
 	uid = uid +'dark'
 	time = int(time)
@@ -174,7 +172,7 @@ def checkScreenOn(cur,uid,time):
 
 
 #[DONE]: function that produces labels [stressed/not stressed] from surveys [DONE]
-#[DONE]: function that computes application usage statistics in time window (day/week) (frequency)
+#[DONE]: function that computes application usage statistics in time window (hour/day/week) (frequency)
 #[DONE]: function that computes time intervals between subsequent app usages (not background, only user ) cross-checked with screen info
 
 
