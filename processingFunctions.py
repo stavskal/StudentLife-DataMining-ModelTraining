@@ -28,10 +28,10 @@ def epochCalc(timestamp):
 	hour=int(hour)
 	if hour >= 9 and hour <=18:
 		epoch='day'
-	elif hour>18 and hour <0:
-		epoch='evening'
-	else:
+	elif hour>0 and hour <9:
 		epoch='night'
+	else:
+		epoch='evening'
 
 	return epoch
 
@@ -157,13 +157,68 @@ def checkScreenOn(cur,uid,time):
 def loadStressLabels(cur,uid):
 	cur.execute("SELECT time_stamp,stress_level  FROM {0} ".format(uid) )
 	records = cur.fetchall()
+
 	return records
+
+
+
+# produces sequence of (stressLabel,epoch) due to the fact that users reported their stress
+# at different times. Thus, unification is needed in order to represent their reports in a 
+# similar manner
+def epochStressNorm(cur,uid):
+	epochLabels = []
+	#load and sort labels based on timestamps
+	labels = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
+	print(labels)
+
+	i=0
+	epCount=0
+	notOver = True
+
+	epSum = 0
+	epCount = 0
+	stressSum = 0
+
+	for i in range(0,len(labels)-1):
+
+		epochNow = epochCalc(labels[i][0])
+		epochNext = epochCalc(labels[i+1][0])
+
+		if epochNow == epochNext:
+			stressSum += labels[i][1]
+			epSum += 1
+		else:
+			if epSum>0:
+				epochLabels.append( float(stressSum)/epSum )
+			else:
+				epochLabels.append(0)
+			stressSum = 0
+			epCount += 1
+			epSum = 0
+
+
+	#for i in epochLabels:
+	#	if len(i)<5:
+	#		del i
+	print(len(epochLabels))
+
+
+	return epochLabels
+
+
+
+
+
+
+
+
+
 
 
 #testing
 con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
-loadStressLabels(cur,'u01')
+#loadStressLabels(cur,'u01')
 #a=computeAppStats(cur,'u09',day)
 #print(a[0][2])
 #print(a[1][65])
@@ -172,6 +227,7 @@ loadStressLabels(cur,'u01')
 #print(epochCalc(1234551100))
 #countAppOccur(cur,'u01')
 #num = 1365284453
+print(epochStressNorm(cur,'u41'))
 
 #print(checkScreenOn(cur,'u00',num))
 
@@ -181,6 +237,8 @@ loadStressLabels(cur,'u01')
 #[DONE]: function that computes time intervals between subsequent app usages (not background, only user ) cross-checked with screen info
 
 
+#TODO: interpolate time series to make them of same length (pandas.TimeSeries)
+
 #TODO: migrate database to NoSQL																																																																																																																																																									
 #TODO: function that computes sms+calls statistical features in time window (how many sms, how many people)
 #NOTE: some call+sms logs do not contain any data (maybe corrupted download?)
@@ -189,5 +247,4 @@ loadStressLabels(cur,'u01')
 #TODO: train model on data (?)s
 
 
-#TODO for thursday meeting: project proposal on which direction I want this to move (stress background, state of art, what i reviewd in literature) (abstract kind of)
 #TODO for thursday meeting: short term timeplan
