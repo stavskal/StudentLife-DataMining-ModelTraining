@@ -36,6 +36,7 @@ def appStatsL(cur,uid,timestamp):
 #---------------------------------------------------------------------
 # computes the total time (sec) that screen was on during the past day
 def timeScreenOn(cur,uid,timestamp):
+	#table name is in form: uXXdark
 	uid = uid +'dark'
 	#tStart is exactly 24h before given timestamp
 	tStart = timestamp - day
@@ -45,6 +46,7 @@ def timeScreenOn(cur,uid,timestamp):
 	records = cur.fetchall()
 
 	totalTime =0
+	# each tuple contains the time period screen was on. Calculate its duration and add it to total
 	for k in records:
 		totalTime += k[1]-k[0]
 
