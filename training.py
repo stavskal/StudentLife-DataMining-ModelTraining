@@ -22,7 +22,8 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 def appStatsL(cur,uid,timestamp):
 	appOccurTotal = countAppOccur(cur,uid)
 	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
-	appStats1 = np.zeros(len(keys))
+	keys = np.sort(keys)
+	appStats1 = np.zeros(keys[-1])
 	appStats=[]
 	
 	tStart = timestamp - 2*day
@@ -35,22 +36,19 @@ def appStatsL(cur,uid,timestamp):
 
 	for i in keys:
 		if i in records.keys():
-			print(records[i])
-			print(appOccurTotal[i])
-			appStats1[i] = float(records[i])*100 / float(appOccurTotal[i])
-	print(appStats1)
+			appStats1[i-1] = float(records[i])*100 / float(appOccurTotal[i])
 
 	
 
 
 
 	# number of unique applications 
-	uniqueApps = len(records.keys())
+	#uniqueApps = len(records.keys())
 	# usageFrequency:  number of times in timeWin / total times
-	usageFrequency= {k: float(records[k])*100/float(appOccurTotal[k]) for k in appOccurTotal.viewkeys() & records.viewkeys() }
-	appStats.append(usageFrequency)
+	#usageFrequency= {k: float(records[k])*100/float(appOccurTotal[k]) for k in appOccurTotal.viewkeys() & records.viewkeys() }
+	#appStats.append(usageFrequency)
 
-	return uniqueApps
+	return appStats1
 
 
 
@@ -78,18 +76,25 @@ def timeScreenOn(cur,uid,timestamp):
 
 
 
-
+#testing
 con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
-#timeScreenOn(cur,'u12',1365809051)
-#for i in uids:
-appStatsL(cur,'u00',1366388106)
 
+cur.execute("SELECT time_stamp,stress_level FROM {0}".format('u00'))
 
+records = cur.fetchall()
+Xtrain =[]
+for s in records:
+	Xtrain.append(appStatsL(cur,'u00',s[0]))
+print(Xtrain)
+print(len(Xtrain[0]))
+print(len(Xtrain[5]))
 
 
 
 """
+
+
 def main(argv):
 
 	#connecting to database
@@ -142,6 +147,5 @@ def main(argv):
 if __name__ == '__main__':
 	main()
 
-
-	"""
-
+"""
+	
