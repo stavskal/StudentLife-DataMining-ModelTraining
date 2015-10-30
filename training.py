@@ -2,7 +2,7 @@ import json,csv,sys,os,psycopg2
 import numpy as np
 from collections import Counter 
 from processingFunctions import  computeAppStats, countAppOccur, appTimeIntervals
-
+from sklearn.ensemble import RandomForestClassifier
 
 
 day = 86400
@@ -15,10 +15,10 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 
 
 
-# returns feature vector corresponing to 'timestamp' stress report (label)
+# returns feature vector corresponing to (timestamp,stress_level) (report)
 # This feature vector is of size len(uniqueApps), total number of different apps for user
 # each cell corresponds to the % of time for one app. Apps that were not used during 
-# previous day simply have zero in feature vector cell
+# previous day simply have zero in feature vector cell (sparse)
 def appStatsL(cur,uid,timestamp):
 	appOccurTotal = countAppOccur(cur,uid)
 	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
@@ -79,19 +79,54 @@ def timeScreenOn(cur,uid,timestamp):
 #testing
 con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
+testUser='u43'
 
-cur.execute("SELECT time_stamp,stress_level FROM {0}".format('u00'))
+cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
 
 records = cur.fetchall()
-Xtrain =[]
+print(len(records))
+
+# The intended thing to achieve here is to calculate the feature vector(FV) in the 24h period proceeding each 
+# stress report. Xtrain's rows are those FVs for ALL stress report timestamps 
+# DONE: change datatype from list to more efficient, e.g numpy 2D array
+a=appStatsL(cur,testUser,records[0][0])
+trainLength= int(0.7 * (len(records)))
+Xtrain = np.empty([trainLength, len(a)], dtype=float)
+Ytrain = np.empty([trainLength],dtype=int)
+
+testLength= int(0.25 *len(records))
+Xtest = np.empty([testLength, len(a)], dtype=float)
+Ytest = np.empty(testLength,dtype=int)
+
+i=0
 for s in records:
-	Xtrain.append(appStatsL(cur,'u00',s[0]))
-print(Xtrain)
-print(len(Xtrain[0]))
-print(len(Xtrain[5]))
 
+	if i==trainLength+testLength:
+		break
 
+	if i>=trainLength and i < trainLength+testLength:
+		Xtest[i-trainLength] = appStatsL(cur,testUser,s[0])
+		Ytest[i-trainLength] = s[1]
+		
+	else:
+		Xtrain[i] = appStatsL(cur,testUser,s[0])
+		Ytrain[i] = s[1]
 
+	
+		
+	i += 1
+
+print(Ytest)
+
+forest = RandomForestClassifier(n_estimators=10)
+
+forest = forest.fit(Xtrain,Ytrain)
+
+output = forest.predict(Xtest)
+print(output)
+
+acc = forest.score(Xtest,Ytest)
+print(acc)
 """
 
 
