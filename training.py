@@ -1,4 +1,4 @@
-import json,csv,sys,os,psycopg2
+import json,csv,sys,os,psycopg2,random
 import numpy as np
 from collections import Counter 
 from processingFunctions import  computeAppStats, countAppOccur, appTimeIntervals
@@ -10,6 +10,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
+uids1=['u10','u16','u19','u32','u33','u43','u44','u49','u57','u59']
 
 
 
@@ -79,54 +80,57 @@ def timeScreenOn(cur,uid,timestamp):
 #testing
 con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
-testUser='u43'
+acc=0
+for testUser in uids1:
+	#testUser='u49'
+	print(testUser)
 
-cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
+	cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
 
-records = cur.fetchall()
-print(len(records))
+	records = cur.fetchall()
+	#print(len(records))
 
-# The intended thing to achieve here is to calculate the feature vector(FV) in the 24h period proceeding each 
-# stress report. Xtrain's rows are those FVs for ALL stress report timestamps 
-# DONE: change datatype from list to more efficient, e.g numpy 2D array
-a=appStatsL(cur,testUser,records[0][0])
-trainLength= int(0.7 * (len(records)))
-Xtrain = np.empty([trainLength, len(a)], dtype=float)
-Ytrain = np.empty([trainLength],dtype=int)
+	# The intended thing to achieve here is to calculate the feature vector(FV) in the 24h period proceeding each 
+	# stress report. Xtrain's rows are those FVs for ALL stress report timestamps 
+	# DONE: change datatype from list to more efficient, e.g numpy 2D array
+	a=appStatsL(cur,testUser,records[0][0])
 
-testLength= int(0.25 *len(records))
-Xtest = np.empty([testLength, len(a)], dtype=float)
-Ytest = np.empty(testLength,dtype=int)
+	trainLength= int(0.7 * (len(records)))
+	Xtrain = np.empty([trainLength, len(a)], dtype=float)
+	Ytrain = np.empty([trainLength],dtype=int)
 
-i=0
-for s in records:
+	testLength= int(0.25 *len(records))
+	Xtest = np.empty([testLength, len(a)], dtype=float)
+	Ytest = np.empty(testLength,dtype=int)
 
-	if i==trainLength+testLength:
-		break
 
-	if i>=trainLength and i < trainLength+testLength:
-		Xtest[i-trainLength] = appStatsL(cur,testUser,s[0])
-		Ytest[i-trainLength] = s[1]
-		
-	else:
-		Xtrain[i] = appStatsL(cur,testUser,s[0])
-		Ytrain[i] = s[1]
+	used=[]
+	for i in range(0,trainLength):
+		trainU = random.choice(records)
+		used.append(trainU)
+		Xtrain[i] = appStatsL(cur,testUser,trainU[0])
+		Ytrain[i] = trainU[1]
 
-	
-		
-	i += 1
+	for i in range (0,testLength):
+		testU = random.choice(records)
+		while testU in used:
+			testU = random.choice(records)
+		Xtest[i] = appStatsL(cur,testUser,testU[0])
+		Ytest[i] = testU[1]
 
-print(Ytest)
+	#print(Ytest)
 
-forest = RandomForestClassifier(n_estimators=10)
+	forest = RandomForestClassifier(n_estimators=30,n_jobs=4)
 
-forest = forest.fit(Xtrain,Ytrain)
+	forest = forest.fit(Xtrain,Ytrain)
 
-output = forest.predict(Xtest)
-print(output)
+	#output = forest.predict(Xtest)
+	#print(output)
 
-acc = forest.score(Xtest,Ytest)
-print(acc)
+	acc += forest.score(Xtest,Ytest)
+	print(acc)
+
+print('Average accuracy: {0} %'.format(float(acc)*100/len(uids1)))
 """
 
 
