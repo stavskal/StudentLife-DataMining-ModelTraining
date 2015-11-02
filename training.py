@@ -30,8 +30,8 @@ def appStatsL(cur,uid,timestamp,timeWin):
 	appOccurTotal = countAppOccur(cur,uid)
 	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
 	keys = np.sort(keys)
-	appStats1 = np.zeros(keys[-1])
-	appStats=[]
+	appStats1 = np.zeros(len(keys))
+
 	
 	tStart = timestamp - timeWin
 
@@ -41,9 +41,9 @@ def appStatsL(cur,uid,timestamp,timeWin):
 		records[k[0]] = records.pop(k)
 
 
-	for i in keys:
-		if i in records.keys():
-			appStats1[i-1] = float(records[i])*100 / float(appOccurTotal[i])
+	for i in range(0,len(keys)):
+		if keys[i] in records.keys():
+			appStats1[i] = float(records[keys[i]])*100 / float(appOccurTotal[keys[i]])
 
 	
 
@@ -54,7 +54,6 @@ def appStatsL(cur,uid,timestamp,timeWin):
 	# usageFrequency:  number of times in timeWin / total times
 	#usageFrequency= {k: float(records[k])*100/float(appOccurTotal[k]) for k in appOccurTotal.viewkeys() & records.viewkeys() }
 	#appStats.append(usageFrequency)
-
 	return appStats1
 
 
@@ -115,6 +114,7 @@ for timeWin in times:
 		# The intended thing to achieve here is to calculate the feature vector(FV) in the 24h period proceeding each 
 		# stress report. Xtrain's rows are those FVs for ALL stress report timestamps 
 		a=appStatsL(cur,testUser,records[0][0],timeWin)
+		
 
 		trainLength= int(0.7 * (len(records)))
 
@@ -128,7 +128,7 @@ for timeWin in times:
 
 
 		used=[]
-		# after this loop, 70% of the data will be in Xtrain
+		# after this loop, 70% of the data will be in Xtrain (randomly chosen)
 		for i in range(0,trainLength):
 			trainU = random.choice(records)
 			while trainU in used:
@@ -138,7 +138,7 @@ for timeWin in times:
 			Ytrain[i] = trainU[1]
 
 
-		#after this loop, the remaining 30% of data will be in Xtest
+		#after this loop, the remaining 30% of data will be in Xtest (randomly chosen)
 		for i in range (0,testLength):
 			testU = random.choice(records)
 			while testU in used:

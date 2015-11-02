@@ -1,8 +1,18 @@
 import matplotlib.pyplot as pyp
 import numpy as np
+import seaborn as sns
 import psycopg2,random
 import datetime as dt
 from processingFunctions import *
+
+
+heat = np.array([[63.34, 60.70,60.8 ,54],[61.14, 55.38, 63.99, 60.05],[60.6, 60.54,57.52,58.14]])
+print(heat)
+ax1 = sns.heatmap(heat, vmin=50, vmax=65)
+sb = ax1.get_figure()
+sb.savefig('heatmap.png')
+print('done baby')
+
 
 #x = [0,2,4,6,8]
 #y = [0,3,3,7,1]
@@ -20,15 +30,24 @@ y7=[]
 
 
 xA = np.array([i for i in range(0,4)])
-yA = np.array([63.99, 61.43 , 62.31 , 56.49])
+yA = np.array([67.37, 59.10 , 58.79 , 59.28])
 xtic = ['One day', '3/4 day','Half day', 'Quarter of day']
 pyp.xticks(xA, xtic)
-pyp.plot(xA,yA)
-pyp.ylabel('Accuracy (%)')
+ax = sns.tsplot(yA,xA)
+sns.set(style = 'ticks', color_codes=True)
+sns.axes_style('darkgrid')
+pyp.title('Random Forest Personalized Classifier(100 most common apps)')
+pyp.ylabel('Averaged Accuracy over Users (%)')
 pyp.xlabel('Time period for App Statistics calculation')
-pyp.savefig('trainingTimes.png')
+seabornFig = ax.get_figure()
+seabornFig.savefig('testSea.png')
+#pyp.plot(xA,yA,'--x')
 
-print('done baby')
+#pyp.savefig('trainingTimes.png')
+
+
+
+"""
 stressL = []
 
 
@@ -100,3 +119,4 @@ pyp.savefig('stressLabels.png')
 
 
 
+"""
