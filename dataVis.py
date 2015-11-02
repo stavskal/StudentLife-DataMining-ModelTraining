@@ -17,6 +17,21 @@ y5=[]
 y6=[]
 y7=[]
 
+
+
+xA = np.array([i for i in range(0,4)])
+yA = np.array([63.99, 61.43 , 62.31 , 56.49])
+xtic = ['One day', '3/4 day','Half day', 'Quarter of day']
+pyp.xticks(xA, xtic)
+pyp.plot(xA,yA)
+pyp.ylabel('Accuracy (%)')
+pyp.xlabel('Time period for App Statistics calculation')
+pyp.savefig('trainingTimes.png')
+
+print('done baby')
+stressL = []
+
+
 stressL = []
 epochs = []
 
@@ -43,7 +58,7 @@ for i in uids:
 	stressL.append(temp)
 
 for i in uids:
-
+	
 	temp = epochStressNorm(cur,i)
 	epochs.append(temp)
 
