@@ -1,7 +1,7 @@
 import json,csv,sys,os,psycopg2,random
 import numpy as np
 from collections import Counter 
-from processingFunctions import  computeAppStats, countAppOccur, appTimeIntervals
+from processingFunctions import  computeAppStats, countAppOccur, appTimeIntervals, loadStressLabels
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score
 import matplotlib.pyplot as plt
@@ -18,7 +18,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 
 uids1=['u10','u16','u19','u33','u44','u36','u57']
 
-
+ch = [ 25,60,100]
 
 
 
@@ -26,8 +26,8 @@ uids1=['u10','u16','u19','u33','u44','u36','u57']
 # This feature vector is of size len(uniqueApps), total number of different apps for user
 # each cell corresponds to the % of time for one app. Apps that were not used during 
 # previous day simply have zero in feature vector cell (sparse)
-def appStatsL(cur,uid,timestamp,timeWin):
-	appOccurTotal = countAppOccur(cur,uid)
+def appStatsL(cur,uid,timestamp,timeWin,mc):
+	appOccurTotal = countAppOccur(cur,uid,mc)
 	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
 	keys = np.sort(keys)
 	appStats1 = np.zeros(len(keys))
@@ -78,6 +78,20 @@ def timeScreenOn(cur,uid,timestamp):
 
 	return totalTime
 
+#-----------------------------------------------------------------------
+# computes mean and median of stress reports in order to find the optimal 
+# time window for the app statistics calculation to reduce overlapping of features
+def meanStress(cur,uid):
+	records = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
+	mean = 0 
+
+	for i in range(0,len(records)-1):
+		mean += records[i][0] - records[i+1][0]
+
+	mean = float(mean) / len(records)
+	print(mean)
+
+
 
 
 
@@ -90,90 +104,91 @@ cur = con.cursor()
 
 # ------------TEST CASE-----------------------------
 # 10 user were picked from the dataset
-# 70% of their stress reports and the corresponding 24h features are used for training
+# 70% of their stress reports and the corresponding features are used for training
 # the rest 30% is used for testing. The train/test reports are randomly distributed
 # throughout the whole experiment duration. No FV is used both for training and testing.
-# Sfter the 10 models are trained and tested, the overall accuracy is averaged
-# Random Forests were picked due to their 'universal applicability', each with 20 decision trees
+# After the 10 models are trained and tested, the overall accuracy is averaged
+# Random Forests were picked due to their 'universal applicability', each with 25 decision trees
 
-# training person models with different time period for app usage calculation 
-# One day, 3/4 day, half a day, quarter of a day to figure which outputs the better result
+
+# Exhaustive Grid Search Cross-Validation
+# training person models with different time period for app usage calculation and different no. of 
+# most common apps to figure which outputs the better result 
+
 accuracies = []
+for mc in ch:
+	for timeWin in times:
+		acc=0
+		totalP=0
+		totalR=0
+		for testUser in uids1:
 
-for timeWin in times:
-	acc=0
-	totalP=0
-	totalR=0
-	for testUser in uids1:
-		print(testUser)
+			cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
 
-		cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
+			records = cur.fetchall()
 
-		records = cur.fetchall()
+			# The intended thing to achieve here is to calculate the feature vector(FV) in the 24h period proceeding each 
+			# stress report. Xtrain's rows are those FVs for ALL stress report timestamps 
+			a=appStatsL(cur,testUser,records[0][0],timeWin,mc)
 
-		# The intended thing to achieve here is to calculate the feature vector(FV) in the 24h period proceeding each 
-		# stress report. Xtrain's rows are those FVs for ALL stress report timestamps 
-		a=appStatsL(cur,testUser,records[0][0],timeWin)
-		
+			trainLength= int(0.7 * (len(records)))
 
-		trainLength= int(0.7 * (len(records)))
+			#initiating empty numpy arrays to store training and test data/labels
+			Xtrain = np.empty([trainLength, len(a)], dtype=float)
+			Ytrain = np.empty([trainLength],dtype=int)
 
-		#initiating empty numpy arrays to store training and test data/labels
-		Xtrain = np.empty([trainLength, len(a)], dtype=float)
-		Ytrain = np.empty([trainLength],dtype=int)
-
-		testLength= int(0.3 *len(records))
-		Xtest = np.empty([testLength, len(a)], dtype=float)
-		Ytest = np.empty(testLength,dtype=int)
+			testLength= int(0.3 *len(records))
+			Xtest = np.empty([testLength, len(a)], dtype=float)
+			Ytest = np.empty(testLength,dtype=int)
 
 
-		used=[]
-		# after this loop, 70% of the data will be in Xtrain (randomly chosen)
-		for i in range(0,trainLength):
-			trainU = random.choice(records)
-			while trainU in used:
+			used=[]
+			# after this loop, 70% of the data will be in Xtrain (randomly chosen)
+			for i in range(0,trainLength):
 				trainU = random.choice(records)
-			used.append(trainU)
-			Xtrain[i] = appStatsL(cur,testUser,trainU[0],timeWin)
-			Ytrain[i] = trainU[1]
+				while trainU in used:
+					trainU = random.choice(records)
+				used.append(trainU)
+				Xtrain[i] = appStatsL(cur,testUser,trainU[0],timeWin,mc)
+				Ytrain[i] = trainU[1]
 
 
-		#after this loop, the remaining 30% of data will be in Xtest (randomly chosen)
-		for i in range (0,testLength):
-			testU = random.choice(records)
-			while testU in used:
+			#after this loop, the remaining 30% of data will be in Xtest (randomly chosen)
+			for i in range (0,testLength):
 				testU = random.choice(records)
-			used.append(testU)
-			Xtest[i] = appStatsL(cur,testUser,testU[0],timeWin)
-			Ytest[i] = testU[1]
+				while testU in used:
+					testU = random.choice(records)
+				used.append(testU)
+				Xtest[i] = appStatsL(cur,testUser,testU[0],timeWin,mc)
+				Ytest[i] = testU[1]
 
 
-		#initiating and training forest with 25 trees, n_jobs indicates threads
-		forest = RandomForestClassifier(n_estimators=25,n_jobs=4)
-		forest = forest.fit(Xtrain,Ytrain)
-		
-		output = forest.predict(Xtest) 
-		
-		# because accuracy is never good on its own, precision and recall are computed
-		metricP = precision_score(Ytest,output, average='micro')
-		metricR = recall_score(Ytest,output, average='micro')
+			#initiating and training forest with 25 trees, n_jobs indicates threads
+			forest = RandomForestClassifier(n_estimators=25,n_jobs=4)
+			forest = forest.fit(Xtrain,Ytrain)
+			
+			output = forest.predict(Xtest) 
+			
+			# because accuracy is never good on its own, precision and recall are computed
+			#metricP = precision_score(Ytest,output, average='macro')
+			#metricR = recall_score(Ytest,output, average='macro')
 
-		tempAcc = forest.score(Xtest,Ytest)
+			tempAcc = forest.score(Xtest,Ytest)
 
-		totalP += metricP
-		totalR +=metricR
-		acc += tempAcc
-		
+			#totalP += metricP
+			#totalR +=metricR
+			acc += tempAcc
+			
 
-	print('Average accuracy: {0} %'.format(float(acc)*100/len(uids1)))
-	print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
-	print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
-	accuracies.append(float(acc)*100/len(uids1))
+		print('Average accuracy: {0} %  most common: {1} timewindow: {2}'.format(float(acc)*100/len(uids1), mc,timeWin))
+		#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
+		#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
+		accuracies.append(float(acc)*100/len(uids1))
 
 
-x = np.array([i for i in range(0,len(accuracies))])
-y = np.asarray(accuracies)
-xtic = ['One day', '3/4 day','Half day', 'Quarter of day']
-plt.xticks(x, xtic)
-plt.plot(x,y)
-plt.savefig('trainingTimes.png')
+#x = np.array([i for i in range(0,len(accuracies))])
+#y = np.asarray(accuracies)
+#xtic = ['One day', '3/4 day','Half day', 'Quarter of day']
+#plt.xticks(x, xtic)
+#plt.plot(x,y)
+#plt.savefig('trainingTimes.png')
