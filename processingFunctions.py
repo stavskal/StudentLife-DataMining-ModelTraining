@@ -9,7 +9,12 @@ from collections import Counter
 
 hour = 3600
 day = 86400
+halfday = 43200
 weekSec = 604000
+
+uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13','u14','u15','u16','u17','u18','u19','u20','u22','u23','u24',
+'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
+'u56','u57','u58','u59']
 
 
 #---------------------------------------------------------------------------------------
@@ -36,26 +41,25 @@ def epochCalc(timestamp):
 	return epoch
 
 #---------------------------------------------------------------------------------------
-# counts occurence of each app for given user 'uid' during experiment
+# counts occurences of 20 most common apps for given user 'uid' during experiment
 def countAppOccur(cur,uid):
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
 
-	#Counter class counts occurrences of unique ids, and the 200 most common are kept
-	records =dict(Counter( cur.fetchall() ).most_common(20))
+	#Counter class counts occurrences of unique ids, and the 50 most common are kept
+	records =dict(Counter( cur.fetchall() ).most_common(100))
 	
+	#transforming keys cause of ugly return shape of Counter class
+	for k in records.keys():
+		records[k[0]] = records.pop(k)
+
 	return records
 
 
 #---------------------------------------------------------------------------------------
-# computes application usage frequency and number of unique apps per uid per timeWin (hour, day, week)
+# computes application usage frequency and number of unique apps per uid for given
 def computeAppStats(cur,uid,timeWin):
 	appOccur = countAppOccur(cur,uid)
 	appStats=[]
-
-	#aplying transformation to keys because Counter returns them in bad shape
-	for k in appOccur.keys():
-		appOccur[k[0]] = appOccur.pop(k)
-
 
 	#selecting start and end date of data acquisition
 	cur.execute("""SELECT min(time_stamp),max(time_stamp) FROM appusage WHERE uid = %s""",[uid])
@@ -127,7 +131,7 @@ def appTimeIntervals(cur,uid):
 		for use in range(0,len(sortedTimestamp)-1):
 
 			#checking if screen was on during appusage to only count user interactions, not background processes
-			if checkScreenOn(cur, uid, sortedTimestamp[use][1]) == True:
+			if checkScreenOn(cur, uid, sortedTimestamp[use][1]) == True and checkScreenOn(cur, uid, sortedTimestamp[use+1][1]):
 				timeInterval[k].append(sortedTimestamp[use+1][1] - sortedTimestamp[use][1]) 
 		
 	#timeIntervals is a list of lists, each row contains consequent uses of signle application (also a list)
@@ -139,6 +143,7 @@ def appTimeIntervals(cur,uid):
 
 #---------------------------------------------------------------------------------------
 # returns True if screen was On at given time, false otherwise
+# used to determine whether application was user initiated or not
 def checkScreenOn(cur,uid,time):
 	uid = uid +'dark'
 	time = int(time)
@@ -161,7 +166,7 @@ def loadStressLabels(cur,uid):
 	return records
 
 
-
+# THIS IS SHIT THIS IS NOT PYTHON THIS IS SHIT
 # produces sequence of (stressLabel,epoch) due to the fact that users reported their stress
 # at different times. Thus, unification is needed in order to represent their reports in a 
 # similar manner
@@ -169,7 +174,6 @@ def epochStressNorm(cur,uid):
 	epochLabels = []
 	#load and sort labels based on timestamps
 	labels = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
-	print(labels)
 
 	i=0
 	epCount=0
@@ -205,6 +209,12 @@ def epochStressNorm(cur,uid):
 
 	return epochLabels
 
+def mapStressEpochs(cur):
+	labelLength = []
+
+	for u in uids:
+		labelLength.append( [len(loadStressLabels(cur,u)),u] )
+	print(labelLength)
 
 
 
@@ -216,8 +226,8 @@ def epochStressNorm(cur,uid):
 
 
 #testing
-con = psycopg2.connect(database='dataset', user='tabrianos')
-cur = con.cursor()
+#con = psycopg2.connect(database='dataset', user='tabrianos')
+#cur = con.cursor()
 #loadStressLabels(cur,'u01')
 #a=computeAppStats(cur,'u09',day)
 #print(a[0][2])
@@ -227,8 +237,8 @@ cur = con.cursor()
 #print(epochCalc(1234551100))
 #countAppOccur(cur,'u01')
 #num = 1365284453
-print(epochStressNorm(cur,'u41'))
-
+#print(epochStressNorm(cur,'u41'))
+#mapStressEpochs(cur)
 #print(checkScreenOn(cur,'u00',num))
 
 
@@ -236,8 +246,6 @@ print(epochStressNorm(cur,'u41'))
 #[DONE]: function that computes application usage statistics in time window (hour/day/week) (frequency)
 #[DONE]: function that computes time intervals between subsequent app usages (not background, only user ) cross-checked with screen info
 
-
-#TODO: interpolate time series to make them of same length (pandas.TimeSeries)
 
 #TODO: migrate database to NoSQL																																																																																																																																																									
 #TODO: function that computes sms+calls statistical features in time window (how many sms, how many people)
