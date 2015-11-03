@@ -5,12 +5,15 @@ from processingFunctions import  computeAppStats, countAppOccur, appTimeInterval
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score
 import matplotlib.pyplot as plt
+import time
+
+
 
 day = 86400
 halfday = 43200
 quarterday = 21600
 
-times =[day,(halfday+quarterday) ,halfday,quarterday]
+times =[2*day]
 
 uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13','u14','u15','u16','u17','u18','u19','u20','u22','u23','u24',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
@@ -18,7 +21,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 
 uids1=['u10','u16','u19','u33','u44','u36','u57']
 
-ch = [ 25,60,100]
+ch = [ 100,25,60]
 
 
 
@@ -122,49 +125,47 @@ for mc in ch:
 		totalP=0
 		totalR=0
 		for testUser in uids1:
+			t0 = time.time()
 
 			cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
-
 			records = cur.fetchall()
 
-			# The intended thing to achieve here is to calculate the feature vector(FV) in the 24h period proceeding each 
-			# stress report. Xtrain's rows are those FVs for ALL stress report timestamps 
+			# Xtrain's rows are those FVs for ALL stress report timestamps 
 			a=appStatsL(cur,testUser,records[0][0],timeWin,mc)
-
+			
 			trainLength= int(0.7 * (len(records)))
+			testLength= int(0.3 *len(records))
 
-			#initiating empty numpy arrays to store training and test data/labels
 			Xtrain = np.empty([trainLength, len(a)], dtype=float)
 			Ytrain = np.empty([trainLength],dtype=int)
 
-			testLength= int(0.3 *len(records))
+			
 			Xtest = np.empty([testLength, len(a)], dtype=float)
 			Ytest = np.empty(testLength,dtype=int)
 
 
-			used=[]
-			# after this loop, 70% of the data will be in Xtrain (randomly chosen)
+
+
+
+			X = np.array(records)
+			np.random.shuffle(X)
+
 			for i in range(0,trainLength):
-				trainU = random.choice(records)
-				while trainU in used:
-					trainU = random.choice(records)
-				used.append(trainU)
-				Xtrain[i] = appStatsL(cur,testUser,trainU[0],timeWin,mc)
-				Ytrain[i] = trainU[1]
+				Xtrain[i] = appStatsL(cur,testUser,X[i][0],timeWin,mc)
+				Ytrain[i] = X[i][1]
+
+			for i in range(0,testLength):
+				Xtest[i] = appStatsL(cur,testUser,X[i+trainLength][0],timeWin,mc) 
+				Ytest[i] = X[i+trainLength][1]
 
 
-			#after this loop, the remaining 30% of data will be in Xtest (randomly chosen)
-			for i in range (0,testLength):
-				testU = random.choice(records)
-				while testU in used:
-					testU = random.choice(records)
-				used.append(testU)
-				Xtest[i] = appStatsL(cur,testUser,testU[0],timeWin,mc)
-				Ytest[i] = testU[1]
+			t1 = time.time()
 
-
+			print('first part: {0}'.format(t1-t0))
 			#initiating and training forest with 25 trees, n_jobs indicates threads
-			forest = RandomForestClassifier(n_estimators=25,n_jobs=4)
+			t0 = time.time()
+
+			forest = RandomForestClassifier(n_estimators=100,n_jobs=-1)
 			forest = forest.fit(Xtrain,Ytrain)
 			
 			output = forest.predict(Xtest) 
@@ -179,6 +180,8 @@ for mc in ch:
 			#totalR +=metricR
 			acc += tempAcc
 			
+			t1 = time.time()
+			print('second part: {0}'.format(t1-t0))
 
 		print('Average accuracy: {0} %  most common: {1} timewindow: {2}'.format(float(acc)*100/len(uids1), mc,timeWin))
 		#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
