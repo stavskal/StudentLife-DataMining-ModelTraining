@@ -63,12 +63,12 @@ def appStatsL(cur,uid,timestamp,timeWin,mc):
 
 
 #---------------------------------------------------------------------
-# computes the total time (sec) that screen was on during the past day
-def timeScreenOn(cur,uid,timestamp):
+# computes the total time (sec) that screen was on and off and the times it went on
+def timeScreenOn(cur,uid,timestamp,timeWin):
 	#table name is in form: uXXdark
 	uid = uid +'dark'
-	#tStart is exactly 24h before given timestamp
-	tStart = timestamp - day
+	#tStart is 'timeWin' seconds before given timestamps
+	tStart = timestamp - timeWin
 
 	#fetching all records that fall within this time period
 	cur.execute('SELECT timeStart,timeStop FROM {0} WHERE timeStart >= {1} AND timeStop <= {2}'.format(uid,tStart,timestamp))
@@ -79,7 +79,8 @@ def timeScreenOn(cur,uid,timestamp):
 	for k in records:
 		totalTime += k[1]-k[0]
 
-	return totalTime
+
+	return totalTime,len(records)
 
 #-----------------------------------------------------------------------
 # computes mean and median of stress reports in order to find the optimal 
@@ -89,10 +90,10 @@ def meanStress(cur,uid):
 	mean = 0 
 
 	for i in range(0,len(records)-1):
-		mean += records[i][0] - records[i+1][0]
+		mean += records[i+1][0] - records[i][0]
 
 	mean = float(mean) / len(records)
-	print(mean)
+	return(mean)
 
 
 
@@ -118,6 +119,11 @@ cur = con.cursor()
 # training person models with different time period for app usage calculation and different no. of 
 # most common apps to figure which outputs the better result 
 
+
+
+
+#TODO: maybe stick to a fixed number of apps and add more features such as screen on/off time(s), no of unique apps etc
+#TODO: do another grid search over most common apps but this time with time window equal to meanStress(cur,uid)
 accuracies = []
 for mc in ch:
 	for timeWin in times:
@@ -149,6 +155,8 @@ for mc in ch:
 
 			X = np.array(records)
 			np.random.shuffle(X)
+			np.random.shuffle(X)
+
 
 			for i in range(0,trainLength):
 				Xtrain[i] = appStatsL(cur,testUser,X[i][0],timeWin,mc)
