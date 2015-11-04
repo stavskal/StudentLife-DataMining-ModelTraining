@@ -19,16 +19,16 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u10','u16','u19','u33','u44','u36','u57']
+uids1=['u00','u07','u08','u19','u22','u32']
 
-ch = [ 100,25,60]
+ch = [ 100,60,25]
 
 
 
 # returns feature vector corresponing to (timestamp,stress_level) (report)
-# This feature vector is of size len(uniqueApps), total number of different apps for user
-# each cell corresponds to the % of time for one app. Apps that were not used during 
-# previous day simply have zero in feature vector cell (sparse)
+# This feature vector is of size mc(=Most Common), which varies due to Cross Validation.
+# each cell corresponds to the % of usage for each app. Apps that were not used during 
+# previous day simply have zero in feature vector cell
 def appStatsL(cur,uid,timestamp,timeWin,mc):
 	appOccurTotal = countAppOccur(cur,uid,mc)
 	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
@@ -123,78 +123,75 @@ cur = con.cursor()
 
 
 #TODO: maybe stick to a fixed number of apps and add more features such as screen on/off time(s), no of unique apps etc
+# DO NOT FORGET  ----> IF ABOVE FEATURE VECTOR IS CONSTRUCTED TO MAKE IT ZERO MEAN
 #TODO: do another grid search over most common apps but this time with time window equal to meanStress(cur,uid)
 accuracies = []
 for mc in ch:
-	for timeWin in times:
-		acc=0
-		totalP=0
-		totalR=0
-		for testUser in uids1:
-			t0 = time.time()
 
-			cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
-			records = cur.fetchall()
+	acc=0
+	totalP=0
+	totalR=0
+	for testUser in uids1:
+
+		cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
+		records = cur.fetchall()
+
+		meanTime = meanStress(cur,testUser)
 
 			# Xtrain's rows are those FVs for ALL stress report timestamps 
-			a=appStatsL(cur,testUser,records[0][0],timeWin,mc)
+		a=appStatsL(cur,testUser,records[0][0],meanTime,mc)
 			
-			trainLength= int(0.7 * (len(records)))
-			testLength= int(0.3 *len(records))
+		trainLength= int(0.7 * (len(records)))
+		testLength= int(0.3 *len(records))
 
-			Xtrain = np.empty([trainLength, len(a)], dtype=float)
-			Ytrain = np.empty([trainLength],dtype=int)
+		Xtrain = np.empty([trainLength, len(a)], dtype=float)
+		Ytrain = np.empty([trainLength],dtype=int)
 
 			
-			Xtest = np.empty([testLength, len(a)], dtype=float)
-			Ytest = np.empty(testLength,dtype=int)
+		Xtest = np.empty([testLength, len(a)], dtype=float)
+		Ytest = np.empty(testLength,dtype=int)
 
 
 
 
 
-			X = np.array(records)
-			np.random.shuffle(X)
-			np.random.shuffle(X)
+		X = np.array(records)
+		np.random.shuffle(X)
+		np.random.shuffle(X)
 
 
-			for i in range(0,trainLength):
-				Xtrain[i] = appStatsL(cur,testUser,X[i][0],timeWin,mc)
-				Ytrain[i] = X[i][1]
+		for i in range(0,trainLength):
+			Xtrain[i] = appStatsL(cur,testUser,X[i][0],meanTime,mc)
+			Ytrain[i] = X[i][1]
 
-			for i in range(0,testLength):
-				Xtest[i] = appStatsL(cur,testUser,X[i+trainLength][0],timeWin,mc) 
-				Ytest[i] = X[i+trainLength][1]
+		for i in range(0,testLength):
+			Xtest[i] = appStatsL(cur,testUser,X[i+trainLength][0],meanTime,mc) 
+			Ytest[i] = X[i+trainLength][1]
 
 
-			t1 = time.time()
 
-			print('first part: {0}'.format(t1-t0))
-			#initiating and training forest with 25 trees, n_jobs indicates threads
-			t0 = time.time()
+		#initiating and training forest with 25 trees, n_jobs indicates threads, -1 means all available
 
-			forest = RandomForestClassifier(n_estimators=100,n_jobs=-1)
-			forest = forest.fit(Xtrain,Ytrain)
+		forest = RandomForestClassifier(n_estimators=35,n_jobs=-1)
+		forest = forest.fit(Xtrain,Ytrain)
 			
-			output = forest.predict(Xtest) 
+		output = forest.predict(Xtest) 
 			
 			# because accuracy is never good on its own, precision and recall are computed
 			#metricP = precision_score(Ytest,output, average='macro')
 			#metricR = recall_score(Ytest,output, average='macro')
 
-			tempAcc = forest.score(Xtest,Ytest)
+		tempAcc = forest.score(Xtest,Ytest)
 
 			#totalP += metricP
 			#totalR +=metricR
-			acc += tempAcc
-			
-			t1 = time.time()
-			print('second part: {0}'.format(t1-t0))
+		acc += tempAcc
 
-		print('Average accuracy: {0} %  most common: {1} timewindow: {2}'.format(float(acc)*100/len(uids1), mc,timeWin))
-		#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
-		#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
-		accuracies.append(float(acc)*100/len(uids1))
+
+	print('Average accuracy: {0} %  most common: {1} timewindow: {2}'.format(float(acc)*100/len(uids1), mc,meanTime))
+	#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
+	#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
+	accuracies.append(float(acc)*100/len(uids1))
 
 
 #x = np.array([i for i in range(0,len(accuracies))])
