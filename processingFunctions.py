@@ -195,7 +195,8 @@ t = 1366007398
 #d = countAppOccur(cur,'u59',30,t)
 
 
-# Takes as input the a list with all Feature Vectors and returns the train matrix X
+# Takes as input the list with all Feature Vectors and returns the train matrix X
+# Bag-of-Apps approach is followed to construct FVs of fixed length
 def constructBOA(FVlist):
 	FV = []
 	allkeys = []
