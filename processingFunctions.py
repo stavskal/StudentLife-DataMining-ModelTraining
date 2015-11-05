@@ -16,6 +16,8 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
+uids1=['u00','u24','u08','u57','u52','u51','u36']
+
 
 #---------------------------------------------------------------------------------------
 # converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
@@ -40,13 +42,28 @@ def epochCalc(timestamp):
 
 	return epoch
 
+#-----------------------------------------------------------------------
+# computes average time of stress reports in order to find the optimal 
+# time window for the app statistics calculation to reduce overlapping of features
+def meanStress(cur,uid):
+	records = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
+	mean = 0 
+
+	for i in range(0,len(records)-1):
+		mean += records[i+1][0] - records[i][0]
+
+	mean = float(mean) / len(records)
+	return(mean)
+
+
 #---------------------------------------------------------------------------------------
-# counts occurences of 20 most common apps for given user 'uid' during experiment
-def countAppOccur(cur,uid):
-	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
+# counts occurences of 'mc' most common apps for given user 'uid' during experiment
+def countAppOccur(cur,uid,mc,timeQuery):
+	meanS = meanStress(cur,uid)
+	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp >= %s;",[uid,timeQuery,timeQuery-meanS])
 
 	#Counter class counts occurrences of unique ids, and the 50 most common are kept
-	records =dict(Counter( cur.fetchall() ).most_common(100))
+	records =Counter( cur.fetchall() )
 	
 	#transforming keys cause of ugly return shape of Counter class
 	for k in records.keys():
@@ -108,7 +125,7 @@ def computeAppStats(cur,uid,timeWin):
 # calculates time between subsequent application usages
 # IMPORTANT: many applications are running in the background during all sampling times (every 1200sec)
 # They have not been included in returned list, they were cross-checked with phone screen data
-def appTimeIntervals(cur,uid):
+def appTimeIntervals(cur,uid,timestamp,timeWin):
 	timeInterval=[]
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
 
@@ -117,7 +134,7 @@ def appTimeIntervals(cur,uid):
 	#unique holds the total number of unique applications
 	unique = len(allKeys)
 
-	cur.execute("""SELECT running_task_id,time_stamp  FROM appusage WHERE uid = %s ; """, [uid] )
+	cur.execute("""SELECT running_task_id,time_stamp  FROM appusage WHERE uid = %s AND time_stamp>=%s AND time_stamp <=%s  ; """, [uid,timestamp-timeWin,timestamp] )
 	records = cur.fetchall()	
 	
 
@@ -163,62 +180,7 @@ def loadStressLabels(cur,uid):
 	cur.execute("SELECT time_stamp,stress_level  FROM {0} ".format(uid) )
 	records = cur.fetchall()
 
-	return records
-
-
-# THIS IS SHIT THIS IS NOT PYTHON THIS IS SHIT
-# produces sequence of (stressLabel,epoch) due to the fact that users reported their stress
-# at different times. Thus, unification is needed in order to represent their reports in a 
-# similar manner
-def epochStressNorm(cur,uid):
-	epochLabels = []
-	#load and sort labels based on timestamps
-	labels = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
-
-	i=0
-	epCount=0
-	notOver = True
-
-	epSum = 0
-	epCount = 0
-	stressSum = 0
-
-	for i in range(0,len(labels)-1):
-
-		epochNow = epochCalc(labels[i][0])
-		epochNext = epochCalc(labels[i+1][0])
-
-		if epochNow == epochNext:
-			stressSum += labels[i][1]
-			epSum += 1
-		else:
-			if epSum>0:
-				epochLabels.append( float(stressSum)/epSum )
-			else:
-				epochLabels.append(0)
-			stressSum = 0
-			epCount += 1
-			epSum = 0
-
-
-	#for i in epochLabels:
-	#	if len(i)<5:
-	#		del i
-	print(len(epochLabels))
-
-
-	return epochLabels
-
-def mapStressEpochs(cur):
-	labelLength = []
-
-	for u in uids:
-		labelLength.append( [len(loadStressLabels(cur,u)),u] )
-	print(labelLength)
-
-
-
-
+	return records	
 
 
 
@@ -226,14 +188,25 @@ def mapStressEpochs(cur):
 
 
 #testing
-#con = psycopg2.connect(database='dataset', user='tabrianos')
-#cur = con.cursor()
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
+t = 1366007398
+d = countAppOccur(cur,'u59',30,t)
+print(d)
+print('--------------------------------------------------------')
+for i in range(0,10):
+	t += day
+	d = d + countAppOccur(cur,'u59',30,t)
+	print(d)
+
+	print('-----------------------------------------------------')
+
 #loadStressLabels(cur,'u01')
 #a=computeAppStats(cur,'u09',day)
 #print(a[0][2])
 #print(a[1][65])
 #print(a[2])
-#print(len(appTimeIntervals(cur,'u00')))
+#print((appTimeIntervals(cur,'u00',1366752858,day)))
 #print(epochCalc(1234551100))
 #countAppOccur(cur,'u01')
 #num = 1365284453
