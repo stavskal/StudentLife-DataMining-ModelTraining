@@ -57,12 +57,13 @@ def meanStress(cur,uid):
 
 
 #---------------------------------------------------------------------------------------
-# counts occurences of 'mc' most common apps for given user 'uid' during experiment
-def countAppOccur(cur,uid,mc,timeQuery):
+# counts occurences of bag-of-apps for given user 'uid' during experiment
+# in the average report time window around timeQuery stress report
+def countAppOccur(cur,uid,timeQuery):
 	meanS = meanStress(cur,uid)
 	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp >= %s;",[uid,timeQuery,timeQuery-meanS])
 
-	#Counter class counts occurrences of unique ids, and the 50 most common are kept
+	#Counter class counts occurrences of unique ids
 	records =Counter( cur.fetchall() )
 	
 	#transforming keys cause of ugly return shape of Counter class
@@ -191,17 +192,32 @@ def loadStressLabels(cur,uid):
 con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
 t = 1366007398
-d = countAppOccur(cur,'u59',30,t)
-print(d)
-print('--------------------------------------------------------')
-for i in range(0,10):
-	t += day
-	d = d + countAppOccur(cur,'u59',30,t)
-	print(d)
+#d = countAppOccur(cur,'u59',30,t)
 
-	print('-----------------------------------------------------')
 
+# Takes as input the a list with all Feature Vectors and returns the train matrix X
+def constructBOA(FVlist):
+	FV = []
+	allkeys = []
+	meanS = meanStress(cur,uid)
+
+	# after this loop allkeys will have all unique keys
+	# TODO: might be poor in terms of performance
+	for i in range(0,len(FVlist)):
+		for key in FVlist[i].keys():
+			if key not in allkeys:
+				allkeys.append(key)
+
+	for i in range(0,len(FVlist)):
+		for key in allkeys:
+			if key not in FVlist[i].keys():
+				FVlist[i][key] = 0
+
+
+	return(np.array(FVlist))
 #loadStressLabels(cur,'u01')
+computeAppStatsNEW(cur,'u59',t)
+
 #a=computeAppStats(cur,'u09',day)
 #print(a[0][2])
 #print(a[1][65])
