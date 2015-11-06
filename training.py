@@ -19,7 +19,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u00','u59','u08','u57','u52','u51','u36']
+uids1=['u59','u00','u08','u57','u52','u51','u36']
 
 ch = [120,100,70,50,35]
 
@@ -38,25 +38,13 @@ def appStatsL(cur,uid,timestamp,timeWin,mc):
 	
 	tStart = timestamp - timeWin
 
-	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp > %s AND time_stamp < %s ; """, [uid,tStart,timestamp] )
+	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp < %s ; """, [uid,timestamp] )
 	records= Counter( cur.fetchall() )
 
 	for k in records.keys():
 		records[k[0]] = records.pop(k)
 
 
-	#for i in range(0,len(keys)):
-		#if keys[i] in records.keys():
-		#	appStats1[i] = float(records[keys[i]])*100 / float(appOccurTotal[keys[i]])
-
-	
-
-
-	# number of unique applications 
-	#uniqueApps = len(records.keys())
-	# usageFrequency:  number of times in timeWin / total times
-	#usageFrequency= {k: float(records[k])*100/float(appOccurTotal[k]) for k in appOccurTotal.viewkeys() & records.viewkeys() }
-	#appStats.append(usageFrequency)
 	return records
 
 
@@ -143,11 +131,11 @@ for mc in ch:
 		# Xtrain's rows are those FVs for ALL stress report timestamps 
 		a=appStatsL(cur,testUser,records[0][0],meanTime,mc)
 
+		#defining length of Training/Test Set
 		trainLength= int(0.7 * len(records))
 		testLength= int(0.3 *len(records))
 
-		print(trainLength)
-		print(testLength)
+		#instantiating the appropriate matrices
 		Xtrain = np.empty([trainLength, len(a)], dtype=float)
 		Ytrain = np.empty([trainLength],dtype=int)
 
@@ -155,15 +143,15 @@ for mc in ch:
 		Xtest = np.empty([testLength, len(a)], dtype=float)
 		Ytest = np.empty(testLength,dtype=int)
 
-
+		#X,Y store initially the dataset and the labels accordingly
 		Y = np.empty(len(records))
-
-
 		X = np.array(records)
+
 		# X is shuffled twice to ensure that the report sequence is close to random
 		np.random.shuffle(X)
 		np.random.shuffle(X)
 
+		# Xlist contains Feature Vectors of many lengths according to each period
 		for i in range(0,len(records)):
 			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,mc) )
 			Y[i] = X[i][1]
@@ -172,7 +160,8 @@ for mc in ch:
 		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
 		# for training and testing, Xtt
 		Xtt = constructBOA(Xlist)
-		Xtrain = Xtt[0:trainLength,: ]
+
+		Xtrain = Xtt[0:trainLength, :]
 		Ytrain = Y[0:trainLength]
 
 		Xtest = Xtt [ trainLength:len(records),:  ]
@@ -180,11 +169,19 @@ for mc in ch:
 
 
 		#initiating and training forest, n_jobs indicates threads, -1 means all available
-		forest = RandomForestClassifier(n_estimators=35)
-		print(Xtrain.shape, Ytrain.shape)
-		print(Xtest.shape, Ytest.shape)
+		forest = RandomForestClassifier(n_estimators=35, n_jobs = -1)
 		forest = forest.fit(Xtrain,Ytrain)
-			
+
+
+		importances = forest.feature_importances_
+		indices = np.argsort(importances)[::-1]
+
+# Print the feature ranking
+		print("Feature ranking:")
+
+		for f in range(X.shape[1]):
+			print("{0} feature {1} ({1})".format(f + 1, indices[f], importances[indices[f]]))
+		
 		output = forest.predict(Xtest) 
 			
 		# because accuracy is never good on its own, precision and recall are computed
