@@ -19,7 +19,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u00','u24','u08','u57','u52','u51','u36']
+uids1=['u00','u59','u08','u57','u52','u51','u36']
 
 ch = [120,100,70,50,35]
 
@@ -143,10 +143,11 @@ for mc in ch:
 		# Xtrain's rows are those FVs for ALL stress report timestamps 
 		a=appStatsL(cur,testUser,records[0][0],meanTime,mc)
 
-		trainLength= int(0.7 * (len(records)))
+		trainLength= int(0.7 * len(records))
 		testLength= int(0.3 *len(records))
 
 		print(trainLength)
+		print(testLength)
 		Xtrain = np.empty([trainLength, len(a)], dtype=float)
 		Ytrain = np.empty([trainLength],dtype=int)
 
@@ -155,7 +156,7 @@ for mc in ch:
 		Ytest = np.empty(testLength,dtype=int)
 
 
-
+		Y = np.empty(len(records))
 
 
 		X = np.array(records)
@@ -163,45 +164,37 @@ for mc in ch:
 		np.random.shuffle(X)
 		np.random.shuffle(X)
 
-		for i in range(0,2):
+		for i in range(0,len(records)):
 			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,mc) )
-			print(Xlist[i])
-			Ytrain[i] = X[i][1]
-
-		print('----------------------------------')
-		print(Xlist[1])
-		print('----------------------------------')
-
-		testLast = constructBOA(Xlist)
-
-		print('----------------------------------')
-		print(testLast[1])
-		print(len(testLast[1]))
-		print('----------------------------------')
-		print(testLast[0])
-		print(len(testLast[0]))
-
-		for i in range(0,testLength):
-			Xtest[i] = appStatsL(cur,testUser,X[i+trainLength][0],meanTime,mc) 
-			Ytest[i] = X[i+trainLength][1]
+			Y[i] = X[i][1]
 
 
+		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
+		# for training and testing, Xtt
+		Xtt = constructBOA(Xlist)
+		Xtrain = Xtt[0:trainLength,: ]
+		Ytrain = Y[0:trainLength]
 
-		#initiating and training forest with 25 trees, n_jobs indicates threads, -1 means all available
+		Xtest = Xtt [ trainLength:len(records),:  ]
+		Ytest = Y[ trainLength:len(records) ]
 
-		forest = RandomForestClassifier(n_estimators=35,n_jobs=-1)
+
+		#initiating and training forest, n_jobs indicates threads, -1 means all available
+		forest = RandomForestClassifier(n_estimators=35)
+		print(Xtrain.shape, Ytrain.shape)
+		print(Xtest.shape, Ytest.shape)
 		forest = forest.fit(Xtrain,Ytrain)
 			
 		output = forest.predict(Xtest) 
 			
-			# because accuracy is never good on its own, precision and recall are computed
-			#metricP = precision_score(Ytest,output, average='macro')
-			#metricR = recall_score(Ytest,output, average='macro')
+		# because accuracy is never good on its own, precision and recall are computed
+		#metricP = precision_score(Ytest,output, average='macro')
+		#metricR = recall_score(Ytest,output, average='macro')
 
 		tempAcc = forest.score(Xtest,Ytest)
 
-			#totalP += metricP
-			#totalR +=metricR
+		#totalP += metricP
+		#totalR +=metricR
 		acc += tempAcc
 		maxminAcc.append(tempAcc*100)
 		#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))

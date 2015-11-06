@@ -61,7 +61,8 @@ def meanStress(cur,uid):
 # counts occurences of bag-of-apps for given user 'uid' during experiment
 # in the average report time window around timeQuery stress report
 def countAppOccur(cur,uid,timeQuery):
-	meanS = meanStress(cur,uid)
+	#meanS = meanStress(cur,uid)
+	meanS = day
 	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp >= %s;",[uid,timeQuery,timeQuery-meanS])
 
 	#Counter class counts occurrences of unique ids
@@ -191,28 +192,38 @@ def loadStressLabels(cur,uid):
 
 
 # TODO: add features regarding screen on/off and phone lock
+
 # Takes as input the list with all Feature Vectors and returns the train matrix X
-# Bag-of-Apps approach is followed to construct FVs of fixed length
+# Bag-of-Apps approach is followed to construct the Train Matrix X 
+# FVlist initially contains all FVs which have different length, BOA when returned
 def constructBOA(FVlist):
-	FV = []
 	allkeys = []
-	# after this loop allkeys will have all unique keys
+	newList = []
+	# after this loop 'allkeys' will hold all unique keys
 	# TODO: might be poor in terms of performance, to check for possible optimizations
 	for i in range(0,len(FVlist)):
 		for key in FVlist[i].keys():
 			if key not in allkeys:
 				allkeys.append(key)
-	print('No of keys is:')
-	print(len(allkeys))
+		#Each FV was a dictionary, transforming to SortedDict to later construct BOA matrix
+		b=dict(FVlist[i])
+		a = SortedDict(b)
+		newList.append(a)
 
+	Xtrain = np.empty([len(FVlist),len(allkeys)],dtype=int)
+
+	# The final length of each FV is the unique apps that appeared. Zero is inserted in cell 
+	# that corresponds to an app_id that did not occur during specific period
 	for i in range(0,len(FVlist)):
 		for key in allkeys:
-			if key not in FVlist[i].keys():
-				FVlist[i][key] = 0
-		
+			if key not in newList[i].keys():
+				newList[i][key] = 0
+
+	for i in range(0,len(Xtrain)):
+		Xtrain[i] = newList[i].values()
 
 
-	return(np.array(FVlist))
+	return(Xtrain)
 
 
 
