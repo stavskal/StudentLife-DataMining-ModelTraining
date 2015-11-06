@@ -1,7 +1,7 @@
 import json,csv,sys,os,psycopg2,random
 import numpy as np
 from collections import Counter 
-from processingFunctions import  computeAppStats, countAppOccur, appTimeIntervals, loadStressLabels
+from processingFunctions import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score
 import matplotlib.pyplot as plt
@@ -19,16 +19,16 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u00','u07','u08','u19','u22','u32']
+uids1=['u00','u24','u08','u57','u52','u51','u36']
 
-ch = [ 100,60,25]
+ch = [120,100,70,50,35]
 
 
 
 # returns feature vector corresponing to (timestamp,stress_level) (report)
 # This feature vector is of size mc(=Most Common), which varies due to Cross Validation.
 # each cell corresponds to the % of usage for each app. Apps that were not used during 
-# previous day simply have zero in feature vector cell
+# previous day have zero in feature vector cell
 def appStatsL(cur,uid,timestamp,timeWin,mc):
 	appOccurTotal = countAppOccur(cur,uid,mc)
 	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
@@ -40,16 +40,16 @@ def appStatsL(cur,uid,timestamp,timeWin,mc):
 
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp > %s AND time_stamp < %s ; """, [uid,tStart,timestamp] )
 	records= Counter( cur.fetchall() )
+
 	for k in records.keys():
 		records[k[0]] = records.pop(k)
 
 
-	for i in range(0,len(keys)):
-		if keys[i] in records.keys():
-			appStats1[i] = float(records[keys[i]])*100 / float(appOccurTotal[keys[i]])
+	#for i in range(0,len(keys)):
+		#if keys[i] in records.keys():
+		#	appStats1[i] = float(records[keys[i]])*100 / float(appOccurTotal[keys[i]])
 
 	
-
 
 
 	# number of unique applications 
@@ -57,43 +57,47 @@ def appStatsL(cur,uid,timestamp,timeWin,mc):
 	# usageFrequency:  number of times in timeWin / total times
 	#usageFrequency= {k: float(records[k])*100/float(appOccurTotal[k]) for k in appOccurTotal.viewkeys() & records.viewkeys() }
 	#appStats.append(usageFrequency)
-	return appStats1
+	return records
 
 
 
 
 #---------------------------------------------------------------------
 # computes the total time (sec) that screen was on and off and the times it went on
-def timeScreenOn(cur,uid,timestamp,timeWin):
+def timeScreenLock(cur,uid,timestamp):
 	#table name is in form: uXXdark
-	uid = uid +'dark'
-	#tStart is 'timeWin' seconds before given timestamps
-	tStart = timestamp - timeWin
+	uDark = uid +'dark'
+	#tStart is meanStress(average report frequency) seconds before given timestamps
+	tStart = timestamp - meanStress(cur,uid)
 
 	#fetching all records that fall within this time period
-	cur.execute('SELECT timeStart,timeStop FROM {0} WHERE timeStart >= {1} AND timeStop <= {2}'.format(uid,tStart,timestamp))
+	cur.execute('SELECT timeStart,timeStop FROM {0} WHERE timeStart >= {1} AND timeStop <= {2}'.format(uDark,tStart,timestamp))
 	records = cur.fetchall()
+
+	timesScreen = len(records)
 
 	totalTime =0
 	# each tuple contains the time period screen was on. Calculate its duration and add it to total
 	for k in records:
-		totalTime += k[1]-k[0]
+		totalScreen += k[1]-k[0]
+
+	uLock = uid + 'lock'
+	#fetching all records that fall within this time period
+	cur.execute('SELECT timeStart,timeStop FROM {0} WHERE timeStart >= {1} AND timeStop <= {2}'.format(uLock,tStart,timestamp))
+	records = cur.fetchall()
+
+	totalLock = 0
+	# each tuple contains the time period screen was on. Calculate its duration and add it to total
+	for k in records:
+		totalLock += k[1]-k[0]
+
+	timesLock = len(records)
+
+	return(totalScreen,timesScreen,totalLock,timesLock)
 
 
-	return totalTime,len(records)
 
-#-----------------------------------------------------------------------
-# computes mean and median of stress reports in order to find the optimal 
-# time window for the app statistics calculation to reduce overlapping of features
-def meanStress(cur,uid):
-	records = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
-	mean = 0 
 
-	for i in range(0,len(records)-1):
-		mean += records[i+1][0] - records[i][0]
-
-	mean = float(mean) / len(records)
-	return(mean)
 
 
 
@@ -107,7 +111,7 @@ cur = con.cursor()
 
 
 # ------------TEST CASE-----------------------------
-# 10 user were picked from the dataset
+# A few users were picked from the dataset
 # 70% of their stress reports and the corresponding features are used for training
 # the rest 30% is used for testing. The train/test reports are randomly distributed
 # throughout the whole experiment duration. No FV is used both for training and testing.
@@ -115,35 +119,34 @@ cur = con.cursor()
 # Random Forests were picked due to their 'universal applicability', each with 25 decision trees
 
 
-# Exhaustive Grid Search Cross-Validation
-# training person models with different time period for app usage calculation and different no. of 
-# most common apps to figure which outputs the better result 
-
-
-
-
 #TODO: maybe stick to a fixed number of apps and add more features such as screen on/off time(s), no of unique apps etc
 # DO NOT FORGET  ----> IF ABOVE FEATURE VECTOR IS CONSTRUCTED TO MAKE IT ZERO MEAN
-#TODO: do another grid search over most common apps but this time with time window equal to meanStress(cur,uid)
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#TODO: adjust following test script to 'constructBOA's approach on 
+#its probably not working atm
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 accuracies = []
 for mc in ch:
 
 	acc=0
 	totalP=0
 	totalR=0
+	maxminAcc =[]
+	Xlist=[]
 	for testUser in uids1:
 
 		cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
 		records = cur.fetchall()
-
 		meanTime = meanStress(cur,testUser)
 
-			# Xtrain's rows are those FVs for ALL stress report timestamps 
+		# Xtrain's rows are those FVs for ALL stress report timestamps 
 		a=appStatsL(cur,testUser,records[0][0],meanTime,mc)
-			
+
 		trainLength= int(0.7 * (len(records)))
 		testLength= int(0.3 *len(records))
 
+		print(trainLength)
 		Xtrain = np.empty([trainLength, len(a)], dtype=float)
 		Ytrain = np.empty([trainLength],dtype=int)
 
@@ -156,13 +159,27 @@ for mc in ch:
 
 
 		X = np.array(records)
+		# X is shuffled twice to ensure that the report sequence is close to random
 		np.random.shuffle(X)
 		np.random.shuffle(X)
 
-
-		for i in range(0,trainLength):
-			Xtrain[i] = appStatsL(cur,testUser,X[i][0],meanTime,mc)
+		for i in range(0,2):
+			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,mc) )
+			print(Xlist[i])
 			Ytrain[i] = X[i][1]
+
+		print('----------------------------------')
+		print(Xlist[1])
+		print('----------------------------------')
+
+		testLast = constructBOA(Xlist)
+
+		print('----------------------------------')
+		print(testLast[1])
+		print(len(testLast[1]))
+		print('----------------------------------')
+		print(testLast[0])
+		print(len(testLast[0]))
 
 		for i in range(0,testLength):
 			Xtest[i] = appStatsL(cur,testUser,X[i+trainLength][0],meanTime,mc) 
@@ -186,9 +203,10 @@ for mc in ch:
 			#totalP += metricP
 			#totalR +=metricR
 		acc += tempAcc
-
-
-	print('Average accuracy: {0} %  most common: {1} timewindow: {2}'.format(float(acc)*100/len(uids1), mc,meanTime))
+		maxminAcc.append(tempAcc*100)
+		#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))
+	print('Average accuracy: {0} %  most common: {1}'.format(float(acc)*100/len(uids1), mc))
+	print('Max / Min accuracy: {0}%  / {1}% '.format(max(maxminAcc), min(maxminAcc)))
 	#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
 	#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
 	accuracies.append(float(acc)*100/len(uids1))

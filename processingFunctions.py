@@ -1,6 +1,7 @@
 import datetime,psycopg2
 from collections import Counter
-
+import numpy as np
+from sortedcontainers import SortedDict
 #---------------------------------------------
 #This script contains a collection of functions
 #that are useful in processing the data in
@@ -123,6 +124,7 @@ def computeAppStats(cur,uid,timeWin):
 		
 
 #---------------------------------------------------------------------------------------
+# DOES NOT WORK DOES NOT WORK DOES NOT WORK (YET)
 # calculates time between subsequent application usages
 # IMPORTANT: many applications are running in the background during all sampling times (every 1200sec)
 # They have not been included in returned list, they were cross-checked with phone screen data
@@ -150,7 +152,7 @@ def appTimeIntervals(cur,uid,timestamp,timeWin):
 
 			#checking if screen was on during appusage to only count user interactions, not background processes
 			if checkScreenOn(cur, uid, sortedTimestamp[use][1]) == True and checkScreenOn(cur, uid, sortedTimestamp[use+1][1]):
-				timeInterval[k].append(sortedTimestamp[use+1][1] - sortedTimestamp[use][1]) 
+				timeInterval[k].append(sortedTimestamp[uses+1][1] - sortedTimestamp[use][1]) 
 		
 	#timeIntervals is a list of lists, each row contains consequent uses of signle application (also a list)
 	return timeInterval
@@ -188,37 +190,38 @@ def loadStressLabels(cur,uid):
 
 
 
-#testing
-con = psycopg2.connect(database='dataset', user='tabrianos')
-cur = con.cursor()
-t = 1366007398
-#d = countAppOccur(cur,'u59',30,t)
-
-
+# TODO: add features regarding screen on/off and phone lock
 # Takes as input the list with all Feature Vectors and returns the train matrix X
 # Bag-of-Apps approach is followed to construct FVs of fixed length
 def constructBOA(FVlist):
 	FV = []
 	allkeys = []
-	meanS = meanStress(cur,uid)
-
 	# after this loop allkeys will have all unique keys
-	# TODO: might be poor in terms of performance
+	# TODO: might be poor in terms of performance, to check for possible optimizations
 	for i in range(0,len(FVlist)):
 		for key in FVlist[i].keys():
 			if key not in allkeys:
 				allkeys.append(key)
+	print('No of keys is:')
+	print(len(allkeys))
 
 	for i in range(0,len(FVlist)):
 		for key in allkeys:
 			if key not in FVlist[i].keys():
 				FVlist[i][key] = 0
+		
 
 
 	return(np.array(FVlist))
-#loadStressLabels(cur,'u01')
-computeAppStatsNEW(cur,'u59',t)
 
+
+
+#testing
+#con = psycopg2.connect(database='dataset', user='tabrianos')
+#cur = con.cursor()
+#t = 1366007398
+#d = countAppOccur(cur,'u59',30,t)
+#loadStressLabels(cur,'u01')
 #a=computeAppStats(cur,'u09',day)
 #print(a[0][2])
 #print(a[1][65])
@@ -241,8 +244,3 @@ computeAppStatsNEW(cur,'u59',t)
 #TODO: function that computes sms+calls statistical features in time window (how many sms, how many people)
 #NOTE: some call+sms logs do not contain any data (maybe corrupted download?)
 
-#TODO: visualize stuff to gain more insight
-#TODO: train model on data (?)s
-
-
-#TODO for thursday meeting: short term timeplan
