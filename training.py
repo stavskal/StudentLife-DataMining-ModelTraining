@@ -4,7 +4,7 @@ from collections import Counter
 from processingFunctions import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score
-from sklearn.cross_validation import cross_val_score
+from sklearn.cross_validation import cross_val_score, StratifiedKFold
 import matplotlib.pyplot as plt
 import time
 
@@ -20,7 +20,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u59','u00','u10','u57','u52','u51']
+uids1=['u00','u10','u57','u52','u16','u59']
 
 ch = [120,100,70,50,35]
 
@@ -92,10 +92,10 @@ def timeScreenLock(cur,uid,timestamp):
 
 
 
-
+def main():
 #testing
-con = psycopg2.connect(database='dataset', user='tabrianos')
-cur = con.cursor()
+	con = psycopg2.connect(database='dataset', user='tabrianos')
+	cur = con.cursor()
 
 
 
@@ -109,28 +109,21 @@ cur = con.cursor()
 
 
 #TODO: maybe stick to a fixed number of apps and add more features such as screen on/off time(s), no of unique apps etc
-# DO NOT FORGET  ----> IF ABOVE FEATURE VECTOR IS CONSTRUCTED TO MAKE IT ZERO MEAN
 
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#TODO: fix the goddamn k-fold or any proper train/test subsetting
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-accuracies = []
-for mc in ch:
-
+	accuracies =[]
 	acc=0
 	totalP=0
 	totalR=0
 	maxminAcc =[]
-	Xlist = []
-	ScreenList = []
+	
 	for testUser in uids1:
-
+		Xlist = []
+		ScreenList = []
 		cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
 		records = cur.fetchall()
 		meanTime = meanStress(cur,testUser)
 
-		# Xtrain's rows are those FVs for ALL stress report timestamps 
-		a=appStatsL(cur,testUser,records[0][0],meanTime,mc)
+	
 
 		
 		#X,Y store initially the dataset and the labels accordingly
@@ -146,7 +139,7 @@ for mc in ch:
 		t0 = time.time()
 		
 		for i in range(0,len(records)):
-			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,mc) )
+			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,1) )
 			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],meanTime) )
 			Y[i] = X[i][1]
 		
@@ -160,29 +153,9 @@ for mc in ch:
 		Xtt = constructBOA(Xlist)
 		print('size of Xtt: {0}'.format(Xtt.shape))
 		Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
-		print(Xtt.shape)
+		#print(Xtt.shape)
 		Xtt = np.concatenate((Xtt,np.array(ScreenList)),axis=1)
 		print(Xtt.shape)
-
-
-		#defining length of Training/Test Set
-		trainLength= int(0.7 * Xtt.shape[0])
-		testLength= int(0.3 * Xtt.shape[0])
-
-		#instantiating the appropriate matrices
-		#Xtrain = np.empty([trainLength, len(a)], dtype=float)
-		#Ytrain = np.empty([trainLength],dtype=int)
-
-			
-		#Xtest = np.empty([testLength, len(a)], dtype=float)
-		#Ytest = np.empty(testLength,dtype=int)
-
-
-		Xtrain = Xtt[0:trainLength , :]
-		Ytrain = Y[ 0:trainLength ]
-
-		Xtest = Xtt [ trainLength:Xtt.shape[0], : ]
-		Ytest = Y[ trainLength:Xtt.shape[0] ]
 
 
 		#initiating and training forest, n_jobs indicates threads, -1 means all available
@@ -191,18 +164,7 @@ for mc in ch:
 		print('Scores with proper CV:')
 		print(score*100)
 
-		
-
-		forest = forest.fit(Xtrain,Ytrain)
-
-
-		
-		#output = forest.predict(Xtest) 
-			
-		# because accuracy is never good on its own, precision and recall are computed
-		#metricP = precision_score(Ytest,output, average='macro')
-		#metricR = recall_score(Ytest,output, average='macro')
-
+	
 		tempAcc = score.mean()
 		print('Accuracy: {0} %'.format(tempAcc*100))
 
@@ -213,16 +175,13 @@ for mc in ch:
 		del Xlist[:]
 		del ScreenList[:]
 		#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))
-	print('Average accuracy: {0} %  most common: {1}'.format(float(acc)*100/len(uids1), mc))
+	print('Average accuracy: {0} %  most common: {1}'.format(float(acc)*100/len(uids1), 1))
 	print('Max / Min accuracy: {0}%  / {1}% '.format(max(maxminAcc), min(maxminAcc)))
 	#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
 	#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
-	accuracies.append(float(acc)*100/len(uids1))
 
 
-#x = np.array([i for i in range(0,len(accuracies))])
-#y = np.asarray(accuracies)
-#xtic = ['One day', '3/4 day','Half day', 'Quarter of day']
-#plt.xticks(x, xtic)
-#plt.plot(x,y)
-#plt.savefig('trainingTimes.png')
+
+
+if __name__ == '__main__':
+	main()
