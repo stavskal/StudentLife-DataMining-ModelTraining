@@ -30,7 +30,7 @@ ch = [120,100,70,50,35]
 # each cell corresponds to the % of usage for each app. Apps that were not used during 
 # previous day have zero in feature vector cell
 def appStatsL(cur,uid,timestamp,timeWin,mc):
-	appOccurTotal = countAppOccur(cur,uid,mc)
+	appOccurTotal = countAppOccur(cur,uid,timestamp,timeWin)
 	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
 	keys = np.sort(keys)
 	appStats1 = np.zeros(len(keys))
@@ -38,7 +38,7 @@ def appStatsL(cur,uid,timestamp,timeWin,mc):
 	
 	tStart = timestamp - timeWin
 
-	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp < %s ; """, [uid,timestamp] )
+	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp >= %s; """, [uid,timestamp,timestamp-day] )
 	records= Counter( cur.fetchall() )
 
 	for k in records.keys():
@@ -111,8 +111,7 @@ cur = con.cursor()
 # DO NOT FORGET  ----> IF ABOVE FEATURE VECTOR IS CONSTRUCTED TO MAKE IT ZERO MEAN
 
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#TODO: adjust following test script to 'constructBOA's approach on 
-#its probably not working atm
+#TODO: fix the goddamn k-fold or any proper train/test subsetting
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 accuracies = []
 for mc in ch:
@@ -131,18 +130,7 @@ for mc in ch:
 		# Xtrain's rows are those FVs for ALL stress report timestamps 
 		a=appStatsL(cur,testUser,records[0][0],meanTime,mc)
 
-		#defining length of Training/Test Set
-		trainLength= int(0.7 * len(records))
-		testLength= int(0.3 *len(records))
-
-		#instantiating the appropriate matrices
-		Xtrain = np.empty([trainLength, len(a)], dtype=float)
-		Ytrain = np.empty([trainLength],dtype=int)
-
-			
-		Xtest = np.empty([testLength, len(a)], dtype=float)
-		Ytest = np.empty(testLength,dtype=int)
-
+		
 		#X,Y store initially the dataset and the labels accordingly
 		Y = np.empty(len(records))
 		X = np.array(records)
@@ -152,35 +140,56 @@ for mc in ch:
 		np.random.shuffle(X)
 
 		# Xlist contains Feature Vectors of many lengths according to each period
+		t0 = time.time()
 		for i in range(0,len(records)):
 			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,mc) )
 			Y[i] = X[i][1]
+		t1 = time.time()
+		print('FV time: {0}'.format(t1-t0))
 
 
+		print('Size of Y: {0}'.format(Y.shape))
 		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
 		# for training and testing, Xtt
+		t0 = time.time()
 		Xtt = constructBOA(Xlist)
+		t1 = time.time()
+		print('BOA time: {0}'.format(t1-t0))
+		print('size of Xtt: {0}'.format(Xtt.shape))
+		t0 = time.time()
+		Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
+		t1 = time.time()
+		print('Feature Reduction time: {0}'.format(t1-t0))
+		print('New size of Xtt: {0}'.format(Xtt.shape))
+	
 
-		Xtrain = Xtt[0:trainLength, :]
-		Ytrain = Y[0:trainLength]
+		#defining length of Training/Test Set
+		trainLength= int(0.7 * Xtt.shape[0])
+		testLength= int(0.3 * Xtt.shape[0])
 
-		Xtest = Xtt [ trainLength:len(records),:  ]
-		Ytest = Y[ trainLength:len(records) ]
+		#instantiating the appropriate matrices
+		#Xtrain = np.empty([trainLength, len(a)], dtype=float)
+		#Ytrain = np.empty([trainLength],dtype=int)
+
+			
+		#Xtest = np.empty([testLength, len(a)], dtype=float)
+		#Ytest = np.empty(testLength,dtype=int)
 
 
+		Xtrain = Xtt[0:trainLength , :]
+		Ytrain = Y[ 0:trainLength ]
+
+		print(trainLength,Xtt.shape[0])
+		Xtest = Xtt [ trainLength:Xtt.shape[0], : ]
+		Ytest = Y[ trainLength:Xtt.shape[0] ]
+
+		print(Xtrain.shape, Ytrain.shape)
+		print(Xtest.shape, Ytest.shape)
 		#initiating and training forest, n_jobs indicates threads, -1 means all available
 		forest = RandomForestClassifier(n_estimators=35, n_jobs = -1)
 		forest = forest.fit(Xtrain,Ytrain)
 
 
-		importances = forest.feature_importances_
-		indices = np.argsort(importances)[::-1]
-
-# Print the feature ranking
-		print("Feature ranking:")
-
-		for f in range(X.shape[1]):
-			print("{0} feature {1} ({1})".format(f + 1, indices[f], importances[indices[f]]))
 		
 		output = forest.predict(Xtest) 
 			
@@ -189,11 +198,13 @@ for mc in ch:
 		#metricR = recall_score(Ytest,output, average='macro')
 
 		tempAcc = forest.score(Xtest,Ytest)
+		print('Accuracy: {0} %'.format(tempAcc*100))
 
 		#totalP += metricP
 		#totalR +=metricR
 		acc += tempAcc
 		maxminAcc.append(tempAcc*100)
+		del Xlist[:]
 		#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))
 	print('Average accuracy: {0} %  most common: {1}'.format(float(acc)*100/len(uids1), mc))
 	print('Max / Min accuracy: {0}%  / {1}% '.format(max(maxminAcc), min(maxminAcc)))

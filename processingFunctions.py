@@ -60,10 +60,10 @@ def meanStress(cur,uid):
 #---------------------------------------------------------------------------------------
 # counts occurences of bag-of-apps for given user 'uid' during experiment
 # in the average report time window around timeQuery stress report
-def countAppOccur(cur,uid,timeQuery):
+def countAppOccur(cur,uid,timeQuery,timeW):
 	#meanS = meanStress(cur,uid)
-	meanS = day
-	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp >= %s;",[uid,timeQuery,timeQuery-meanS])
+	#meanS = day
+	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp>=%s;",[uid,timeQuery,timeW])
 
 	#Counter class counts occurrences of unique ids
 	records =Counter( cur.fetchall() )
@@ -224,6 +224,27 @@ def constructBOA(FVlist):
 
 
 	return(Xtrain)
+
+# Takes as input Matrix with rows of features and picks out the most common apps (columns)
+# The average application usage is computed and the applications with the best average are kept
+def selectBestFeatures(X,mc):
+	# average of each column is in 'av'
+	toDel = X.shape[1] -mc
+	for i in range(0,toDel):
+		av = np.mean(X, axis=0)
+		m = np.argmin(av)
+		X = np.delete(X,m,1)
+	return(X)
+
+
+
+
+#arr = np.array([[1,5,3,4],[4,5,6,7],[10,11,12,13],[12,34,56,78]])
+#print(arr)
+#print(selectBestFeatures(arr,3))
+
+
+
 
 
 
