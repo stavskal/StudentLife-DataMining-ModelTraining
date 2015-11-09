@@ -6,17 +6,25 @@ from sortedcontainers import SortedDict
 #This script contains a collection of functions
 #that are useful in processing the data in
 #StudentLife Dataset
+
+# Each functions has its description and internal comments
+# follow the code as well.
 #---------------------------------------------
 
+
+# time lengths expresses in Seconds
 hour = 3600
 day = 86400
 halfday = 43200
 weekSec = 604000
 
+
+# List of all users in dataset
 uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13','u14','u15','u16','u17','u18','u19','u20','u22','u23','u24',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
+# List of 'good' users
 uids1=['u00','u24','u08','u57','u52','u51','u36']
 
 
@@ -44,7 +52,7 @@ def epochCalc(timestamp):
 	return epoch
 
 #-----------------------------------------------------------------------
-# computes average time of stress reports in order to find the optimal 
+# computes average time between stress reports in order to find the optimal 
 # time window for the app statistics calculation to reduce overlapping of features
 def meanStress(cur,uid):
 	records = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
@@ -59,10 +67,8 @@ def meanStress(cur,uid):
 
 #---------------------------------------------------------------------------------------
 # counts occurences of bag-of-apps for given user 'uid' during experiment
-# in the average report time window around timeQuery stress report
+# in the average report time window around 'timeQuery' stress report
 def countAppOccur(cur,uid,timeQuery,timeW):
-	#meanS = meanStress(cur,uid)
-	#meanS = day
 	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp>=%s;",[uid,timeQuery,timeW])
 
 	#Counter class counts occurrences of unique ids
@@ -75,55 +81,8 @@ def countAppOccur(cur,uid,timeQuery,timeW):
 	return records
 
 
-#---------------------------------------------------------------------------------------
-# computes application usage frequency and number of unique apps per uid for given
-def computeAppStats(cur,uid,timeWin):
-	appOccur = countAppOccur(cur,uid)
-	appStats=[]
-
-	#selecting start and end date of data acquisition
-	cur.execute("""SELECT min(time_stamp),max(time_stamp) FROM appusage WHERE uid = %s""",[uid])
-	records = cur.fetchall()
-
-	#tStart: timestamp logging started, tEnd: timestamp loggind ended
-	tStart , tEnd = records[0][0], records[0][1]
-	durationTotal = tEnd - tStart
-
-
-	i=0
-	# iterating until we reach the end of sampling period. In every iteration only the data contained in
-	# given time window are selected from database.
-	# statistic computed is the daily usage frequency(if today used 10 times, 100 total then 0.1 (10%) is returned)
-	# a list of dictionaries is returned, each cell containing a dictionary (key:task_id, value: freq) for a time period 
-	while(tStart+timeWin<tEnd):
-		tAfter = tStart + timeWin
-		cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp > %s AND time_stamp < %s ; """, [uid,tStart,tAfter] )
-		records= Counter( cur.fetchall() )
-
-		#transforming keys to be in readable format
-		for k in records.keys():
-			records[k[0]] = records.pop(k)
-
-		# number of unique applications 
-		uniqueApps = len(records.keys())
-		
-		# usageFrequency:  number of times in timeWin / total times
-		usageFrequency= {k: float(records[k])*100/float(appOccur[k]) for k in appOccur.viewkeys() & records.viewkeys() }
-		
-
-		appStats.append(usageFrequency)
-		
-		tStart = tStart + timeWin
-		tAfter = tAfter + timeWin
-
-		i=i+1
-
-	return appStats
-#---------------------------------------------------------------------------------------
-
 
 		
-
 #---------------------------------------------------------------------------------------
 # DOES NOT WORK DOES NOT WORK DOES NOT WORK (YET)
 # calculates time between subsequent application usages
@@ -164,7 +123,6 @@ def appTimeIntervals(cur,uid,timestamp,timeWin):
 
 #---------------------------------------------------------------------------------------
 # returns True if screen was On at given time, false otherwise
-# used to determine whether application was user initiated or not
 def checkScreenOn(cur,uid,time):
 	uid = uid +'dark'
 	time = int(time)
@@ -178,7 +136,6 @@ def checkScreenOn(cur,uid,time):
 
 
 #---------------------------------------------------------------------------------------
-#---------------------------------------------------------------------------------------
 # retrieves stress labels for user 'uid' and returns a list with their corresponding timestamps
 def loadStressLabels(cur,uid):
 	cur.execute("SELECT time_stamp,stress_level  FROM {0} ".format(uid) )
@@ -186,6 +143,7 @@ def loadStressLabels(cur,uid):
 
 	return records	
 
+#---------------------------------------------------------------------------------------
 
 
 
@@ -225,6 +183,7 @@ def constructBOA(FVlist):
 
 	return(Xtrain)
 
+
 # Takes as input Matrix with rows of features and picks out the most common apps (columns)
 # The average application usage is computed and the applications with the best average are kept
 def selectBestFeatures(X,mc):
@@ -235,6 +194,53 @@ def selectBestFeatures(X,mc):
 		m = np.argmin(av)
 		X = np.delete(X,m,1)
 	return(X)
+
+
+
+def screenStatFeatures(cur,uid,timestamp,timeWin):
+	featList = []
+	uidL= uid +'lock'
+	totalOn =0
+	# Getting data phone lock data from appropriate tables to compute statistics of use
+	cur.execute('SELECT * FROM {0} WHERE timeStart <= {1} AND timeStop >= {2}'.format(uidL,timestamp,timestamp-timeWin))
+	screenTime = np.array(cur.fetchall())
+	
+	# Total time is calculated as follows:
+	#       last row,second cell - first row, first cell          
+	totalTime = screenTime[-1,1] - screenTime[0,0]
+	
+	#instantiating arrays to hold times for locked/unlocked
+	timeOn = np.empty(screenTime.shape[0])
+	timeOff = np.empty(screenTime.shape[0])
+
+
+
+	timeOn[0] = screenTime[0][1]-screenTime[0][0]
+	totalOn += timeOn[0]
+
+	for i in range(1,len(screenTime)):
+		timeOn[i] = screenTime[i][1]-screenTime[i][0]
+		totalOn += timeOn[i]
+
+		timeOff[i] = screenTime[i][0] - screenTime[i-1][1]
+
+
+
+	totalOff= totalTime -totalOn
+
+	#computing and appending statistics to returned list
+	featList.append(np.mean(timeOn))
+	featList.append(np.std(timeOn))
+	featList.append(np.var(timeOn))
+	
+	featList.append(np.mean(timeOff))
+	featList.append(np.std(timeOff))
+	featList.append(np.var(timeOff))
+
+	featList.append(totalOn / totalOff)
+	# converting to np array for compatibility with other FVs
+	return(np.array(featList))
+
 
 
 
@@ -249,8 +255,10 @@ def selectBestFeatures(X,mc):
 
 
 #testing
-#con = psycopg2.connect(database='dataset', user='tabrianos')
-#cur = con.cursor()
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
+screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00'))
+#print(meanStress(cur,'u00'))
 #t = 1366007398
 #d = countAppOccur(cur,'u59',30,t)
 #loadStressLabels(cur,'u01')
