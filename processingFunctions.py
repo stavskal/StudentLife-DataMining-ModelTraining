@@ -196,7 +196,9 @@ def selectBestFeatures(X,mc):
 	return(X)
 
 
-
+# Screen time features are computed to enhance the training procedure
+# Possibly increase prediction accuracy
+# returned list contains 7 features
 def screenStatFeatures(cur,uid,timestamp,timeWin):
 	featList = []
 	uidL= uid +'lock'
@@ -204,50 +206,51 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 	# Getting data phone lock data from appropriate tables to compute statistics of use
 	cur.execute('SELECT * FROM {0} WHERE timeStart <= {1} AND timeStop >= {2}'.format(uidL,timestamp,timestamp-timeWin))
 	screenTime = np.array(cur.fetchall())
-	
-	# Total time is calculated as follows:
-	#       last row,second cell - first row, first cell          
-	totalTime = screenTime[-1,1] - screenTime[0,0]
-	
-	#instantiating arrays to hold times for locked/unlocked
-	timeOn = np.empty(screenTime.shape[0])
-	timeOff = np.empty(screenTime.shape[0])
+
+	#Checking if there are ANY data in this period
+	if screenTime.shape[0]!=0:
+		# Total time is calculated as follows:
+		#       last row,second cell - first row, first cell          
+		totalTime = screenTime[-1][1] - screenTime[0][0]
+		
+		#instantiating arrays to hold times for locked/unlocked
+		timeOn = np.empty(screenTime.shape[0])
+		timeOff = np.empty(screenTime.shape[0])
 
 
 
-	timeOn[0] = screenTime[0][1]-screenTime[0][0]
-	totalOn += timeOn[0]
+		timeOn[0] = screenTime[0][1]-screenTime[0][0]
+		totalOn += timeOn[0]
+		# timeOn cells hold the total time phone remained unlocked
+		# timeOff for the opposite
+		for i in range(1,len(screenTime)):
+			timeOn[i] = screenTime[i][1]-screenTime[i][0]
+			totalOn += timeOn[i]
 
-	for i in range(1,len(screenTime)):
-		timeOn[i] = screenTime[i][1]-screenTime[i][0]
-		totalOn += timeOn[i]
-
-		timeOff[i] = screenTime[i][0] - screenTime[i-1][1]
-
-
-
-	totalOff= totalTime -totalOn
-
-	#computing and appending statistics to returned list
-	featList.append(np.mean(timeOn))
-	featList.append(np.std(timeOn))
-	featList.append(np.var(timeOn))
-	
-	featList.append(np.mean(timeOff))
-	featList.append(np.std(timeOff))
-	featList.append(np.var(timeOff))
-
-	featList.append(totalOn / totalOff)
-	# converting to np array for compatibility with other FVs
-	return(np.array(featList))
+			timeOff[i] = screenTime[i][0] - screenTime[i-1][1]
 
 
 
+		totalOff= totalTime -totalOn
 
+		#computing and appending statistics to returned list
+		featList.append(np.mean(timeOn))
+		featList.append(np.std(timeOn))
+		featList.append(np.var(timeOn))
+		
+		featList.append(np.mean(timeOff))
+		featList.append(np.std(timeOff))
+		featList.append(np.var(timeOff))
 
-#arr = np.array([[1,5,3,4],[4,5,6,7],[10,11,12,13],[12,34,56,78]])
-#print(arr)
-#print(selectBestFeatures(arr,3))
+		featList.append(len(screenTime))
+		featList.append(totalOn)
+		featList.append(totalOff)
+
+		# converting to np array for compatibility with other FVs
+		return(np.array(featList))
+
+	else:
+		return(np.zeros(9))
 
 
 
@@ -255,9 +258,9 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 
 
 #testing
-con = psycopg2.connect(database='dataset', user='tabrianos')
-cur = con.cursor()
-screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00'))
+#con = psycopg2.connect(database='dataset', user='tabrianos')
+#cur = con.cursor()
+#print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
 #t = 1366007398
 #d = countAppOccur(cur,'u59',30,t)

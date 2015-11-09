@@ -4,6 +4,7 @@ from collections import Counter
 from processingFunctions import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score
+from sklearn.cross_validation import cross_val_score
 import matplotlib.pyplot as plt
 import time
 
@@ -19,7 +20,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u59','u00','u08','u57','u52','u51','u36']
+uids1=['u59','u00','u10','u57','u52','u51']
 
 ch = [120,100,70,50,35]
 
@@ -120,7 +121,8 @@ for mc in ch:
 	totalP=0
 	totalR=0
 	maxminAcc =[]
-	Xlist=[]
+	Xlist = []
+	ScreenList = []
 	for testUser in uids1:
 
 		cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
@@ -139,29 +141,29 @@ for mc in ch:
 		np.random.shuffle(X)
 		np.random.shuffle(X)
 
-		# Xlist contains Feature Vectors of many lengths according to each period
+		# Xlist contains Feature Vectors for Applications of different lengths according to each period
+		# ScreenList contains FVs regarding screen info, fixed length (=7) for same periods
 		t0 = time.time()
+		
 		for i in range(0,len(records)):
 			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,mc) )
+			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],meanTime) )
 			Y[i] = X[i][1]
+		
 		t1 = time.time()
 		print('FV time: {0}'.format(t1-t0))
+		print(len(ScreenList))
+		print(len(ScreenList[1]))
 
-
-		print('Size of Y: {0}'.format(Y.shape))
 		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
 		# for training and testing, Xtt
-		t0 = time.time()
 		Xtt = constructBOA(Xlist)
-		t1 = time.time()
-		print('BOA time: {0}'.format(t1-t0))
 		print('size of Xtt: {0}'.format(Xtt.shape))
-		t0 = time.time()
 		Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
-		t1 = time.time()
-		print('Feature Reduction time: {0}'.format(t1-t0))
-		print('New size of Xtt: {0}'.format(Xtt.shape))
-	
+		print(Xtt.shape)
+		Xtt = np.concatenate((Xtt,np.array(ScreenList)),axis=1)
+		print(Xtt.shape)
+
 
 		#defining length of Training/Test Set
 		trainLength= int(0.7 * Xtt.shape[0])
@@ -179,25 +181,29 @@ for mc in ch:
 		Xtrain = Xtt[0:trainLength , :]
 		Ytrain = Y[ 0:trainLength ]
 
-		print(trainLength,Xtt.shape[0])
 		Xtest = Xtt [ trainLength:Xtt.shape[0], : ]
 		Ytest = Y[ trainLength:Xtt.shape[0] ]
 
-		print(Xtrain.shape, Ytrain.shape)
-		print(Xtest.shape, Ytest.shape)
+
 		#initiating and training forest, n_jobs indicates threads, -1 means all available
 		forest = RandomForestClassifier(n_estimators=35, n_jobs = -1)
+		score = cross_val_score(forest, Xtt, Y, cv=4, n_jobs=-1)
+		print('Scores with proper CV:')
+		print(score*100)
+
+		
+
 		forest = forest.fit(Xtrain,Ytrain)
 
 
 		
-		output = forest.predict(Xtest) 
+		#output = forest.predict(Xtest) 
 			
 		# because accuracy is never good on its own, precision and recall are computed
 		#metricP = precision_score(Ytest,output, average='macro')
 		#metricR = recall_score(Ytest,output, average='macro')
 
-		tempAcc = forest.score(Xtest,Ytest)
+		tempAcc = score.mean()
 		print('Accuracy: {0} %'.format(tempAcc*100))
 
 		#totalP += metricP
@@ -205,6 +211,7 @@ for mc in ch:
 		acc += tempAcc
 		maxminAcc.append(tempAcc*100)
 		del Xlist[:]
+		del ScreenList[:]
 		#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))
 	print('Average accuracy: {0} %  most common: {1}'.format(float(acc)*100/len(uids1), mc))
 	print('Max / Min accuracy: {0}%  / {1}% '.format(max(maxminAcc), min(maxminAcc)))
