@@ -55,12 +55,10 @@ def main(argv):
 				#defending against dirty data
 				if 'level' in fullfile[i]:
 					#converting from scale 1-5 to binay 0/1 - not stressed/stressed
-					if int(fullfile[i]['level'])==2 or int(fullfile[i]['level'])==3:
-						stress = 2
-					elif int(fullfile[i]['level'])==1:
-						stress = 1
-					else:
+					if int(fullfile[i]['level'])==4 or int(fullfile[i]['level'])==5:
 						stress = 0
+					else:
+						stress = 1
 					
 
 					insertQ=insert1.format(uid, fullfile[i]['resp_time'], stress)
