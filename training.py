@@ -3,7 +3,7 @@ import numpy as np
 from collections import Counter 
 from processingFunctions import *
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import precision_score, recall_score, confusion_matrix
 from sklearn.cross_validation import cross_val_score, StratifiedKFold
 import matplotlib.pyplot as plt
 import time
@@ -20,7 +20,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u00','u24','u36','u19','u52','u16','u59']
+uids1=['u00','u24','u36','43','u02','u59']
 
 ch = [120,100,70,50,35]
 
@@ -48,41 +48,6 @@ def appStatsL(cur,uid,timestamp,timeWin,mc):
 
 	return records
 
-
-
-
-#---------------------------------------------------------------------
-# computes the total time (sec) that screen was on and off and the times it went on
-def timeScreenLock(cur,uid,timestamp):
-	#table name is in form: uXXdark
-	uDark = uid +'dark'
-	#tStart is meanStress(average report frequency) seconds before given timestamps
-	tStart = timestamp - meanStress(cur,uid)
-
-	#fetching all records that fall within this time period
-	cur.execute('SELECT timeStart,timeStop FROM {0} WHERE timeStart >= {1} AND timeStop <= {2}'.format(uDark,tStart,timestamp))
-	records = cur.fetchall()
-
-	timesScreen = len(records)
-
-	totalTime =0
-	# each tuple contains the time period screen was on. Calculate its duration and add it to total
-	for k in records:
-		totalScreen += k[1]-k[0]
-
-	uLock = uid + 'lock'
-	#fetching all records that fall within this time period
-	cur.execute('SELECT timeStart,timeStop FROM {0} WHERE timeStart >= {1} AND timeStop <= {2}'.format(uLock,tStart,timestamp))
-	records = cur.fetchall()
-
-	totalLock = 0
-	# each tuple contains the time period screen was on. Calculate its duration and add it to total
-	for k in records:
-		totalLock += k[1]-k[0]
-
-	timesLock = len(records)
-
-	return(totalScreen,timesScreen,totalLock,timesLock)
 
 
 
@@ -114,7 +79,7 @@ def main():
 	acc=0
 	totalP=0
 	totalR=0
-	maxminAcc =[]
+	maxminAcc =[]	
 	
 	for testUser in uids1:
 		Xlist = []
@@ -144,25 +109,27 @@ def main():
 			Y[i] = X[i][1]
 		
 		t1 = time.time()
-		print('FV time: {0}'.format(t1-t0))
+		#print('FV time: {0}'.format(t1-t0))
 		#print(len(ScreenList))
 		#print(len(ScreenList[1]))
 
 		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
 		# for training and testing, Xtt
 		Xtt = constructBOA(Xlist)
-		print('size of Xtt: {0}'.format(Xtt.shape))
+		#print('size of Xtt: {0}'.format(Xtt.shape))
 		Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
 		#print(Xtt.shape)
 		Xtt = np.concatenate((Xtt,np.array(ScreenList)),axis=1)
 		#print(Xtt.shape)
 
+		
 
 		#initiating and training forest, n_jobs indicates threads, -1 means all available
-		forest = RandomForestClassifier(n_estimators=35, n_jobs = -1)
+		forest = RandomForestClassifier(n_estimators=100, n_jobs = -1)
 
 		score = 0
-		folds=4
+		folds=3
+		# Ensuring label percentage balance when K-folding
 		skf = StratifiedKFold(Y, n_folds=folds)
 		for train_index,test_index in skf:
 			Xtrain,Xtest = Xtt[train_index], Xtt[test_index]
@@ -172,18 +139,18 @@ def main():
 			score += forest.score(Xtest,ytest)
 
 		output = forest.predict(Xtest)
-		metricR = recall_score(ytest,output,average='binary')
-		metricP = precision_score(ytest,output,average='binary')
+		#metricR = recall_score(ytest,output,average='micro')
+		#metricP = precision_score(ytest,output,average='micro')
 
-		print('P / R: {0} , {1}  '.format(metricP,metricR))
+		#print('P / R: {0} , {1}  '.format(metricP,metricR))
 
 		#score = cross_val_score(forest, Xtt, Y, cv=4, n_jobs=-1)
 		#print('Scores with proper CV:')
 		#print(score*100)
 
 	
-		#tempAcc = score.mean()
-		print('Accuracy: {0} %'.format(score*100/folds))
+		#Averaging accuracy over folds
+		print('Accuracy: {0} %    User: {1}'.format(score*100/folds,testUser))
 
 		#totalP += metricP
 		#totalR +=metricR

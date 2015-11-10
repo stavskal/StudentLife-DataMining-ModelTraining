@@ -4,6 +4,12 @@ from netaddr import EUI
 create = "CREATE TABLE {0} (time_stamp INT, mac VARCHAR(100), class_id INT, level INT) ;"
 insert = "INSERT INTO {0} (time_stamp, mac, class_id,level) VALUES ({1},{2},{3},{4}) ;"
 drop = "DROP TABLE {0}"
+
+# IMPROTANT NOTE
+# MAC addresses are stored in their oct() form as strings
+
+
+
 # Parses data from CSV files to insert bluetooth scans in database tables
 def dbInsertBTscan(csvfile,cur):
 	uid=(csvfile.split('_'))[1][0:3] +'bt'
@@ -59,7 +65,7 @@ def main(argv):
 		for filename in os.listdir(directory):
 			uid=(filename.split('_'))[1][0:3]+'bt'
 			dropQ=drop.format(uid)
-			cur.execute(dropQ)
+			cur.execute(dropQ)c
 		con.commit()
 		con.close()
 		#do stuff
