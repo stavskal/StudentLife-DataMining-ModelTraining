@@ -39,9 +39,11 @@ fig = ax.get_figure()
 fig.savefig('meanStressWinTRY.png')
 
 
-"""
 #               max             		average            			min
-y = np.array([[70.3,74,69.2,69.2,84.6],[61.4,52.6,54.6,50.1,58.2],[50,31.8,41.66,50,25]])
+y1 = np.array([[70.3,74,69.2,69.2,84.6],[61.4,52.6,54.6,50.1,58.2],[50,31.8,41.66,50,25]])
+
+y = np.array([[90.3,74,69.2,69.2,84.6],[61.4,52.6,54.6,50.1,58.2],[50,31.8,41.66,50,25]])
+
 x=[0,1,2,3,4]
 xtic=['120','100','70','50','35']
 pyp.xticks(x, xtic)
@@ -51,3 +53,31 @@ pyp.ylabel('Accuracy over Users (%)')
 ax = sns.tsplot(data=y)
 fig = ax.get_figure()
 fig.savefig('coolplot.png')
+
+"""
+
+
+uids1=['u00','u24','u36','u19']
+uids2=['u00','u24','u36','u19','u52','u16','u59']
+
+
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
+labels =[]
+for u in uids1:
+	records = loadStressLabels(cur,u)
+	labels += [i[1] for i in records]
+
+print(labels)
+
+testOnes = np.ones(100)
+testZeros = np.zeros(5)
+
+con = np.concatenate((testZeros,testOnes), axis=0)
+x=[0,1]
+xtic=['zero', 'one']
+
+
+ax = sns.distplot(con, kde=False)
+fig = ax.get_figure()	
+fig.savefig('ttttt.png')
