@@ -237,7 +237,7 @@ def colocationStats(cur,uid,timestamp,timeWin):
 		total = 0
 
 		cur.execute("SELECT time_stamp,mac FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2}".format(uid+'bt',timestamp-(i+1)*halfday,timestamp-i*halfday))
-		records =Counter( cur.fetchall() )
+		records = cur.fetchall() 
 
 		#By counting how many times each timestamp appeared, we get the number of nearby people
 		times =[item[0] for item in records]
@@ -254,14 +254,28 @@ def colocationStats(cur,uid,timestamp,timeWin):
 
 	return(meanCo)
 
+def conversationStats(cur,uid,timestamp):
+	totalConvTime=np.zeros(2)
+	totalConvs = np.zeros(2)
+	for i in [0,1]:
+		cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-(i+1)*halfday,timestamp-i*halfday))
+		records = cur.fetchall() 
 
+		totalConvs[i] = len(records)
+		#this is the TRUE power of python
+		totalConvTime[i] = sum([item[1]-item[0] for item in records])
+
+	#concatenate 4 features in one nparray before returning
+	return(np.concatenate((totalConvs,totalConvTime),axis=0))
 
 #testing
-#con = psycopg2.connect(database='dataset', user='tabrianos')
-#cur = con.cursor()
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
-#t = 1369745350
+t = 1366885867 
+print(conversationStats(cur,'u00',t))
+
 
 #print(colocationStats(cur,'u00',t ,1))
 #d = countAppOccur(cur,'u59',30,t)
