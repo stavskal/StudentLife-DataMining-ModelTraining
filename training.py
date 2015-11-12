@@ -20,7 +20,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u00','u12','u19','u46','u59','u52','u57']
+uids1=['u36','u12','u19','u46','u59','u52','u57']
 
 ch = [120,100,70,50,35]
 
@@ -54,8 +54,6 @@ def main():
 	con = psycopg2.connect(database='dataset', user='tabrianos')
 	cur = con.cursor()
 
-
-
 # ------------TEST CASE-----------------------------
 # A few users were picked from the dataset
 # 70% of their stress reports and the corresponding features are used for training
@@ -76,12 +74,12 @@ def main():
 	for testUser in uids1:
 		Xlist = []
 		ScreenList = []
-		locList =[]
+		colocationList =[]
 		conversationList =[]
 		#cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
 		#records = cur.fetchall()
 
-		records = loadMoodLabels(cur,testUser)
+		records = loadStressLabels(cur,testUser)
 
 		meanTime = meanStress(cur,testUser)
 
@@ -100,9 +98,9 @@ def main():
 		# ScreenList contains FVs regarding screen info, fixed length (=7) for same periods
 		t0 = time.time()
 		for i in range(0,len(records)):
-			locList.append( colocationStats(cur,testUser,X[i][0]))
+			colocationList.append( colocationStats(cur,testUser,X[i][0]))
 			conversationList.append( conversationStats(cur,testUser,X[i][0]))
-			#Xlist.append( appStatsL(cur,testUser,X[i][0],day) )
+			Xlist.append( appStatsL(cur,testUser,X[i][0],day) )
 			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
 			Y[i] = X[i][1]
 		
@@ -110,14 +108,14 @@ def main():
 
 		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
 		# for training and testing, Xtt
-		#Xtt = constructBOA(Xlist)
+		Xtt = constructBOA(Xlist)
 		#print('size of Xtt: {0}'.format(Xtt.shape))
-		#Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
+		Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
 		#print(Xtt.shape)
-		Xtt = np.concatenate((np.array(ScreenList),np.array(conversationList),np.array(locList)),axis=1)
-		print(Xtt[1,:])
+		Xtt = np.concatenate((Xtt,np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
+		#print(Xtt[1,:])
 
-		print(Xtt.shape)
+		#print(Xtt.shape)
 
 		
 
