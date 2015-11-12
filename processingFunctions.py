@@ -69,7 +69,7 @@ def meanStress(cur,uid):
 # counts occurences of bag-of-apps for given user 'uid' during experiment
 # in the average report time window around 'timeQuery' stress report
 def countAppOccur(cur,uid,timeQuery,timeW):
-	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp>=%s;",[uid,timeQuery,timeW])
+	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp>=%s;",[uid,timeQuery,timeQuery-timeW])
 
 	#Counter class counts occurrences of unique ids
 	records =Counter( cur.fetchall() )
@@ -83,48 +83,12 @@ def countAppOccur(cur,uid,timeQuery,timeW):
 
 
 		
-#---------------------------------------------------------------------------------------
-# DOES NOT WORK DOES NOT WORK DOES NOT WORK (YET)
-# calculates time between subsequent application usages
-# IMPORTANT: many applications are running in the background during all sampling times (every 1200sec)
-# They have not been included in returned list, they were cross-checked with phone screen data
-def appTimeIntervals(cur,uid,timestamp,timeWin):
-	timeInterval=[]
-	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s ; """, [uid] )
-
-	#allKeys holds all the running_task_ids as keys of dict
-	allKeys = dict(Counter( cur.fetchall())).keys() 
-	#unique holds the total number of unique applications
-	unique = len(allKeys)
-
-	cur.execute("""SELECT running_task_id,time_stamp  FROM appusage WHERE uid = %s AND time_stamp>=%s AND time_stamp <=%s  ; """, [uid,timestamp-timeWin,timestamp] )
-	records = cur.fetchall()	
-	
-
-	for k in range(0,unique):
-		#singleAppOccur holds all usages+time of one application (each iter) for given user
-		singleAppOccur = [item for item in records if allKeys[k][0] in item]
-		#sorting app usages according to time in order to compute intervals between subsequent uses
-		sortedTimestamp = sorted(singleAppOccur, key=lambda x:x[1] )
-
-		timeInterval.append([])
-		for use in range(0,len(sortedTimestamp)-1):
-
-			#checking if screen was on during appusage to only count user interactions, not background processes
-			if checkScreenOn(cur, uid, sortedTimestamp[use][1]) == True and checkScreenOn(cur, uid, sortedTimestamp[use+1][1]):
-				timeInterval[k].append(sortedTimestamp[uses+1][1] - sortedTimestamp[use][1]) 
-		
-	#timeIntervals is a list of lists, each row contains consequent uses of signle application (also a list)
-	return timeInterval
-
-#---------------------------------------------------------------------------------------
-
 
 
 #---------------------------------------------------------------------------------------
 # returns True if screen was On at given time, false otherwise
 def checkScreenOn(cur,uid,time):
-	uid = uid +'dark'
+	uid = uid +'lock'
 	time = int(time)
 	cur.execute("SELECT * FROM {0} WHERE timeStart <= {1} AND timeStop >={2} ; ".format(uid,time,time) )
 	records = cur.fetchall()
@@ -144,7 +108,12 @@ def loadStressLabels(cur,uid):
 	return records	
 
 #---------------------------------------------------------------------------------------
+def loadMoodLabels(cur,uid):
+	uid = uid+'mood'
+	cur.execute("SELECT time_stamp, mood  FROM {0} ".format(uid) )
+	records = cur.fetchall()
 
+	return records	
 
 
 
@@ -201,59 +170,89 @@ def selectBestFeatures(X,mc):
 # returned list contains 7 features
 def screenStatFeatures(cur,uid,timestamp,timeWin):
 	featList = []
-	uidL= uid +'lock'
-	totalOn =0
-	# Getting data phone lock data from appropriate tables to compute statistics of use
-	cur.execute('SELECT * FROM {0} WHERE timeStart <= {1} AND timeStop >= {2}'.format(uidL,timestamp,timestamp-timeWin))
-	screenTime = np.array(cur.fetchall())
+	for i in ['lock','dark']:
+		uidL= uid +i
+		totalOn =0
+		# Getting data phone lock data from appropriate tables to compute statistics of use
+		cur.execute('SELECT * FROM {0} WHERE timeStart <= {1} AND timeStop >= {2}'.format(uidL,timestamp,timestamp-timeWin))
+		screenTime = np.array(cur.fetchall())
 
-	#Checking if there are ANY data in this period
-	if screenTime.shape[0]!=0:
-		# Total time is calculated as follows:
-		#       last row,second cell - first row, first cell          
-		totalTime = screenTime[-1][1] - screenTime[0][0]
-		
-		#instantiating arrays to hold times for locked/unlocked
-		timeOn = np.empty(screenTime.shape[0])
-		timeOff = np.empty(screenTime.shape[0])
-
-
-
-		timeOn[0] = screenTime[0][1]-screenTime[0][0]
-		totalOn += timeOn[0]
-		# timeOn cells hold the total time phone remained unlocked
-		# timeOff for the opposite
-		for i in range(1,len(screenTime)):
-			timeOn[i] = screenTime[i][1]-screenTime[i][0]
-			totalOn += timeOn[i]
-
-			timeOff[i] = screenTime[i][0] - screenTime[i-1][1]
+		#Checking if there are ANY data in this period
+		if screenTime.shape[0]!=0:
+			# Total time is calculated as follows:
+			#       last row,second cell - first row, first cell          
+			totalTime = screenTime[-1][1] - screenTime[0][0]
+			
+			#instantiating arrays to hold times for locked/unlocked
+			timeOn = np.empty(screenTime.shape[0])
+			timeOff = np.empty(screenTime.shape[0])
 
 
 
-		totalOff= totalTime -totalOn
+			timeOn[0] = screenTime[0][1]-screenTime[0][0]
+			totalOn += timeOn[0]
+			# timeOn cells hold the total time phone remained unlocked
+			# timeOff for the opposite
+			for i in range(1,len(screenTime)):
+				timeOn[i] = screenTime[i][1]-screenTime[i][0]
+				totalOn += timeOn[i]
 
-		#computing and appending statistics to returned list
-		featList.append(np.mean(timeOn))
-		featList.append(np.std(timeOn))
-		featList.append(np.var(timeOn))
-		
-		featList.append(np.mean(timeOff))
-		featList.append(np.std(timeOff))
-		featList.append(np.var(timeOff))
-
-		featList.append(len(screenTime))
-		featList.append(totalOn)
-		featList.append(totalOff)
-
-		# converting to np array for compatibility with other FVs
-		return(np.array(featList))
-
-	else:
-		return(np.zeros(9))
+				timeOff[i] = screenTime[i][0] - screenTime[i-1][1]
 
 
 
+			totalOff= totalTime -totalOn
+
+			#computing and appending statistics to returned list
+			#featList.extend(np.mean(timeOn),np.std(timeOn),np.var(timeOn),)
+			
+			featList.append(np.mean(timeOn))
+			featList.append(np.std(timeOn))
+			featList.append(np.var(timeOn))
+			
+			featList.append(np.mean(timeOff))
+			featList.append(np.std(timeOff))
+			featList.append(np.var(timeOff))
+
+			featList.append(len(screenTime))
+			featList.append(totalOn)
+			featList.append(totalOff)
+
+			featList.append(np.amax(timeOn))
+			featList.append(np.amax(timeOff))
+
+			# converting to np array for compatibility with other FVs
+			#return(np.array(featList))
+
+		else:
+			featList.extend( np.zeros(11) )
+
+	return(np.array(featList))
+
+# Computes average number people(BT scans) for two periods in a day(first half and second half of day)
+# Stats computed are always proceeding stress reports
+def colocationStats(cur,uid,timestamp,timeWin):
+	meanCo = np.zeros(2)
+	for i in [0,1]:
+		total = 0
+
+		cur.execute("SELECT time_stamp,mac FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2}".format(uid+'bt',timestamp-(i+1)*halfday,timestamp-i*halfday))
+		records =Counter( cur.fetchall() )
+
+		#By counting how many times each timestamp appeared, we get the number of nearby people
+		times =[item[0] for item in records]
+		#print(times)
+		if len(times) >0:
+			uniqueTimes = list(set(times))
+
+			for t in uniqueTimes:
+				#print(times.count(t))
+				total += times.count(t)
+			#mean number of peo
+			#print(total, len(times))
+			meanCo[i] = float(total) / float(len(set(times)))
+
+	return(meanCo)
 
 
 
@@ -262,7 +261,9 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 #cur = con.cursor()
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
-#t = 1366007398
+#t = 1369745350
+
+#print(colocationStats(cur,'u00',t ,1))
 #d = countAppOccur(cur,'u59',30,t)
 #loadStressLabels(cur,'u01')
 #a=computeAppStats(cur,'u09',day)
