@@ -170,7 +170,7 @@ def selectBestFeatures(X,mc):
 # returned list contains 7 features
 def screenStatFeatures(cur,uid,timestamp,timeWin):
 	featList = []
-	for i in ['lock','dark']:
+	for i in ['lock']:
 		uidL= uid +i
 		totalOn =0
 		# Getting data phone lock data from appropriate tables to compute statistics of use
@@ -226,12 +226,14 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 
 		else:
 			featList.extend( np.zeros(11) )
-
-	return(np.array(featList))
+	A= np.nan_to_num(featList)
+	if np.std(A)>0:
+		A = (A-np.mean(A))/np.std(A)
+	return(A)
 
 # Computes average number people(BT scans) for two periods in a day(first half and second half of day)
 # Stats computed are always proceeding stress reports
-def colocationStats(cur,uid,timestamp,timeWin):
+def colocationStats(cur,uid,timestamp):
 	meanCo = np.zeros(2)
 	for i in [0,1]:
 		total = 0
@@ -242,7 +244,7 @@ def colocationStats(cur,uid,timestamp,timeWin):
 		#By counting how many times each timestamp appeared, we get the number of nearby people
 		times =[item[0] for item in records]
 		#print(times)
-		if len(times) >0:
+		if len(set(times)) >0:
 			uniqueTimes = list(set(times))
 
 			for t in uniqueTimes:
@@ -250,34 +252,48 @@ def colocationStats(cur,uid,timestamp,timeWin):
 				total += times.count(t)
 			#mean number of peo
 			#print(total, len(times))
-			meanCo[i] = float(total) / float(len(set(times)))
-
+			meanCo[i] = float(total) / len(set(times))
+	meanCo = np.nan_to_num(meanCo)
 	return(meanCo)
 
 def conversationStats(cur,uid,timestamp):
 	totalConvTime=np.zeros(2)
 	totalConvs = np.zeros(2)
+	totalFeats = np.empty(10)
 	for i in [0,1]:
 		cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-(i+1)*halfday,timestamp-i*halfday))
 		records = cur.fetchall() 
+		timeCon = np.empty(len(records))
 
 		totalConvs[i] = len(records)
 		#this is the TRUE power of python
-		totalConvTime[i] = sum([item[1]-item[0] for item in records])
+		for j in range(0,len(records)):
+			timeCon[j] = records[j][1]-records[j][0]
 
+		totalConvTime[i] = sum([item[1]-item[0] for item in records])
+		#print(totalConvTime[i])
+	#print(np.std(timeCon),np.var(timeCon))
+	
+	a=np.concatenate((totalConvs,totalConvTime),axis=0)
+	a=np.append(a, np.var(timeCon))
+	a=np.append(a, np.std(timeCon))
+	a=np.nan_to_num(a)
+	if np.std(a)>0:
+		a = (a-np.mean(a))/np.std(a)
+	#print(a)
 	#concatenate 4 features in one nparray before returning
-	return(np.concatenate((totalConvs,totalConvTime),axis=0))
+	return(a)
 
 #testing
-con = psycopg2.connect(database='dataset', user='tabrianos')
-cur = con.cursor()
+#con = psycopg2.connect(database='dataset', user='tabrianos')
+#cur = con.cursor()
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
-t = 1366885867 
-print(conversationStats(cur,'u00',t))
+#t = 1366885867 
+#print(conversationStats(cur,'u00',t))
 
 
-#print(colocationStats(cur,'u00',t ,1))
+#print(colocationStats(cur,'u00',t ))
 #d = countAppOccur(cur,'u59',30,t)
 #loadStressLabels(cur,'u01')
 #a=computeAppStats(cur,'u09',day)
