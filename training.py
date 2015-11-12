@@ -20,7 +20,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u00','u24','u36','43','u02','u59']
+uids1=['u00','u12','u19','u46','u59','u52','u57']
 
 ch = [120,100,70,50,35]
 
@@ -30,21 +30,13 @@ ch = [120,100,70,50,35]
 # This feature vector is of size mc(=Most Common), which varies due to Cross Validation.
 # each cell corresponds to the % of usage for each app. Apps that were not used during 
 # previous day have zero in feature vector cell
-def appStatsL(cur,uid,timestamp,timeWin,mc):
-	appOccurTotal = countAppOccur(cur,uid,timestamp,timeWin)
-	keys = np.fromiter(iter(appOccurTotal.keys()), dtype=int)
-	keys = np.sort(keys)
-	appStats1 = np.zeros(len(keys))
-
+def appStatsL(cur,uid,timestamp,timeWin):
 	
-	tStart = timestamp - timeWin
-
 	cur.execute("""SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp >= %s; """, [uid,timestamp,timestamp-day] )
 	records= Counter( cur.fetchall() )
 
 	for k in records.keys():
 		records[k[0]] = records.pop(k)
-
 
 	return records
 
@@ -74,7 +66,7 @@ def main():
 
 
 #TODO: maybe stick to a fixed number of apps and add more features such as screen on/off time(s), no of unique apps etc
-
+	
 	accuracies =[]
 	acc=0
 	totalP=0
@@ -84,8 +76,13 @@ def main():
 	for testUser in uids1:
 		Xlist = []
 		ScreenList = []
-		cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
-		records = cur.fetchall()
+		locList =[]
+		conversationList =[]
+		#cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
+		#records = cur.fetchall()
+
+		records = loadMoodLabels(cur,testUser)
+
 		meanTime = meanStress(cur,testUser)
 
 	
@@ -102,25 +99,25 @@ def main():
 		# Xlist contains Feature Vectors for Applications of different lengths according to each period
 		# ScreenList contains FVs regarding screen info, fixed length (=7) for same periods
 		t0 = time.time()
-		
 		for i in range(0,len(records)):
-			Xlist.append( appStatsL(cur,testUser,X[i][0],meanTime,1) )
-			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],meanTime) )
+			locList.append( colocationStats(cur,testUser,X[i][0]))
+			conversationList.append( conversationStats(cur,testUser,X[i][0]))
+			#Xlist.append( appStatsL(cur,testUser,X[i][0],day) )
+			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
 			Y[i] = X[i][1]
 		
 		t1 = time.time()
-		#print('FV time: {0}'.format(t1-t0))
-		#print(len(ScreenList))
-		#print(len(ScreenList[1]))
 
 		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
 		# for training and testing, Xtt
-		Xtt = constructBOA(Xlist)
+		#Xtt = constructBOA(Xlist)
 		#print('size of Xtt: {0}'.format(Xtt.shape))
-		Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
+		#Xtt = selectBestFeatures(Xtt, Xtt.shape[1]/2)
 		#print(Xtt.shape)
-		Xtt = np.concatenate((Xtt,np.array(ScreenList)),axis=1)
-		#print(Xtt.shape)
+		Xtt = np.concatenate((np.array(ScreenList),np.array(conversationList),np.array(locList)),axis=1)
+		print(Xtt[1,:])
+
+		print(Xtt.shape)
 
 		
 
@@ -134,6 +131,10 @@ def main():
 		for train_index,test_index in skf:
 			Xtrain,Xtest = Xtt[train_index], Xtt[test_index]
 			ytrain,ytest = Y[train_index], Y[test_index]
+			
+			Xtrain = np.array(Xtrain,dtype='float64')
+			Xtest = np.array(Xtest,dtype='float64')
+			#Xtrain[np.isinf(Xtrain)] = 0
 
 			forest = forest.fit(Xtrain,ytrain)
 			score += forest.score(Xtest,ytest)
