@@ -30,26 +30,36 @@ uids1=['u00','u24','u08','u57','u52','u51','u36']
 
 #---------------------------------------------------------------------------------------
 # converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
-def unixTimeConv(timestamp):
-	newTime = str(datetime.datetime.fromtimestamp(int(timestamp)))
-	yearDate,timeT = newTime.split(' ')
-	year,month,day = yearDate.split('-')
-	hour,minutes,sec = timeT.split(':')
-	return (year,month,day,hour,minutes,sec)
+def unixTimeConv(timestamps):
+	splitTimes = np.empty((len(timestamps), 7),dtype='float32')
+	i=0
+	for time in timestamps:
+		newTime = str(datetime.datetime.fromtimestamp(int(time)))
+		yearDate,timeT = newTime.split(' ')
+		year,month,day = yearDate.split('-')
+		hour,minutes,sec = timeT.split(':')
+	#	print(type(hour))
+		splitTimes[i,:] = (year,month,day,hour,minutes,sec,time)
+		i += 1
+
+	return (splitTimes)
 
 #----------------------------------------------------------------------------------------
 # converts timestamp to epoch (day,evening,night) pretty straightforward right?
-def epochCalc(timestamp):
-	year,month,day,hour,minutes,sec = unixTimeConv(timestamp)
-	hour=int(hour)
-	if hour >= 9 and hour <=18:
-		epoch='day'
-	elif hour>0 and hour <9:
-		epoch='night'
-	else:
-		epoch='evening'
+def epochCalc(timestamps):
+	splitTimes = unixTimeConv(timestamps)
+	epochTimes = []
+	for i in range(0,len(splitTimes)):
+		hour=int(splitTimes[i,3])
+		if hour >= 10 and hour <=21:
+			epoch='day'
+		else:
+			epoch='night'
 
-	return epoch
+		epochTimes.append((epoch,splitTimes[i,6]))
+
+
+	return epochTimes
 
 #-----------------------------------------------------------------------
 # computes average time between stress reports in order to find the optimal 
@@ -290,6 +300,9 @@ def conversationStats(cur,uid,timestamp):
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
 #t = 1366885867 
+#t1 = t+1000
+#t2= t1+5000
+#print(unixTimeConv((t,t1,t2)))
 #print(conversationStats(cur,'u00',t))
 
 
