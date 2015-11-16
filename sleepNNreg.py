@@ -4,7 +4,8 @@ from collections import Counter
 from processingFunctions import *
 import matplotlib.pyplot as plt
 import time
-from sklearn.linear_model import LogisticRegression as mlpr
+from sklearn.ensemble import RandomForestRegressor as rfr
+from sklearn.linear_model import LogisticRegression as lr
 import theano
 import theano.tensor as T
 from nolearn.lasagne import NeuralNet
@@ -127,24 +128,12 @@ def chargeDur(cur,uid,timestamp):
 #Function to fit regression NN with one hidden layer
 def regression(X,y):
 	print(X.shape,y.shape)
-	layers_all = [('input',lasagne.layers.InputLayer),
-				   ('dense0', lasagne.layers.DenseLayer),
-				   	('output',lasagne.layers.DenseLayer)]
-
-	net = NeuralNet(layers = layers_all,
-					 input_shape = (None,X.shape[1]),
-					 dense0_num_units = 15,
-					 regression=True,
-					 output_nonlinearity=None,
-					 output_num_units=1,
-					 update_learning_rate=0.01,
-					 max_epochs=150
-					 )
-	net.fit(X,y)
-	for i in range(5,20):
+	forest = rfr(n_estimators=30)
+	forest.fit(X,y)
+	for i in range(0,20):
 		a= np.transpose(X[i,:].reshape(X[i,:].shape[0],1))
 		
-		pr = net.predict(a)
+		pr = forest.predict(a)
 		print(pr,y[i])
 
 
@@ -190,8 +179,8 @@ def main(argv):
 			#	silDur = silenceDur(cur,trainUser,sleepL[i][1])
 				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
 				chDur = chargeDur(cur,trainUser,sleepL[i][1])
-				print([sld,statDur,darkDur,chDur])
-				X.append( [sld,statDur,darkDur,chDur])
+				#print([sld,statDur,darkDur])
+				X.append( [sld,statDur,darkDur])
 				#convS = conversationStats( cur, trainUser, sleepL[i][1])
 				#colS = colocationStats(cur,trainUser,sleepL[i][1])
 
