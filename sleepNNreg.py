@@ -20,6 +20,7 @@ def loadSleepLabels(cur,uid):
 
 	cur.execute('SELECT hour,time_stamp FROM {0}'.format(uid))
 	records = cur.fetchall()
+	records = sorted(records,key=lambda x:x[1])
 	return(np.array(records)) 
 
 
@@ -57,6 +58,7 @@ def stationaryDur(cur,uid,timestamp):
 	for i in range(1,len(records)):
 		# if two consecutive samples are the same and equal to zero (stationary) then calculate duration
 		if records[i-1][1] == records[i][1] and records[i][1]==0 and timeEpochs[i][0]=='night':
+		
 			totalDur += records[i][0] - records[i-1][0] 
 
 	return totalDur
@@ -85,7 +87,7 @@ def silenceDur(cur,uid,timestamp):
 # Feature for Sleep Estimator NN
 def darknessDur(cur,uid,timestamp):
 	totalDur = 0
-	uidSil = uid+'dark'
+	uidS = uid+'dark'
 	#Getting data from database within day period
 	cur.execute('SELECT * FROM {0} WHERE timeStart>={1} AND timeStop<={2}'.format(uidS, timestamp-86400, timestamp) )
 	records = cur.fetchall()
@@ -106,9 +108,9 @@ def darknessDur(cur,uid,timestamp):
 # Feature for Sleep Estimator NN
 def chargeDur(cur,uid,timestamp):
 	totalDur = 0
-	uidSil = uid+'charge'
+	uidC = uid+'charge'
 	#Getting data from database within day period
-	cur.execute('SELECT * FROM {0} WHERE timeStart>={1} AND timeStop<={2}'.format(uidS, timestamp-86400, timestamp) )
+	cur.execute('SELECT * FROM {0} WHERE start_timestamp>={1} AND end_timestamp<={2}'.format(uidC, timestamp-86400, timestamp) )
 	records = cur.fetchall()
 
 	#timeEpochs holds tuples of timestamps and their according epochs
@@ -124,13 +126,14 @@ def chargeDur(cur,uid,timestamp):
 
 #Function to fit regression NN with one hidden layer
 def regression(X,y):
-	layers_all = [('input',layers.InputLayer),
-				   ('dense0', layers.DenseLayer),
-				   	('output',layers.DenseLayer)]
+	print(X.shape,y.shape)
+	layers_all = [('input',lasagne.layers.InputLayer),
+				   ('dense0', lasagne.layers.DenseLayer),
+				   	('output',lasagne.layers.DenseLayer)]
 
 	net = NeuralNet(layers = layers_all,
 					 input_shape = (None,X.shape[1]),
-					 dense0_num_units = 20,
+					 dense0_num_units = 15,
 					 regression=True,
 					 output_nonlinearity=None,
 					 output_num_units=1,
@@ -138,7 +141,11 @@ def regression(X,y):
 					 max_epochs=150
 					 )
 	net.fit(X,y)
-	print(net.score(X,y))
+	for i in range(5,20):
+		a= np.transpose(X[i,:].reshape(X[i,:].shape[0],1))
+		
+		pr = net.predict(a)
+		print(pr,y[i])
 
 
 
@@ -159,10 +166,13 @@ def main(argv):
 	if sys.argv[1]=='-train':
 		
 
-		X = np.empty((len(uids1),5),dtype='float32')
-
+		#X = np.empty((len(uids1),4),dtype='float32')
+		X =[]
+		y= []
 		for trainUser in uids1:
+			print(trainUser)
 			sleepL = loadSleepLabels(cur,trainUser)
+			y += [item[0] for item in sleepL]
 
 			# Computing five features to be used for regression of Sleep time, during night epoch:
 			# 1) Total time phone stayed in dark environment (darkDur)
@@ -174,19 +184,33 @@ def main(argv):
 			for i in range(0,len(sleepL)):
 
 				sld = screenLockDur(cur,trainUser,sleepL[i][1])
+				
 				statDur = stationaryDur(cur,trainUser,sleepL[i][1])
-				silDur = silenceDur(cur,trainUser,sleepL[i][1])
-				darkDur = darknessDUr(cur,trainUser,sleepL[i][1])
+				
+			#	silDur = silenceDur(cur,trainUser,sleepL[i][1])
+				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
 				chDur = chargeDur(cur,trainUser,sleepL[i][1])
-
-				X[i,:] = np.array([sld,statDur,silDur,darkDur,chDur])
+				print([sld,statDur,darkDur,chDur])
+				X.append( [sld,statDur,darkDur,chDur])
 				#convS = conversationStats( cur, trainUser, sleepL[i][1])
 				#colS = colocationStats(cur,trainUser,sleepL[i][1])
 
 				#FV = np.concatenate((convS,colS),axis=0)
 				#np.append(FV,(sld,statD))
+			#print(X)
+			#print('----------')
+			#print(y)
+		
+		Xtrain = np.nan_to_num(X)
+		Xtrain1 = np.empty((Xtrain.shape[0],Xtrain.shape[1]),dtype='float32')
+		print(Xtrain[1,:])
+		for i in range(0,Xtrain.shape[0]):
 
-				print(X)
+			if np.std(Xtrain[i,:])>0:
+				Xtrain1[i,:] = (Xtrain[i,:]-np.mean(Xtrain[i,:]))/np.std(Xtrain[i,:])
+		print(Xtrain1[1,:])
+
+		regression(Xtrain1,np.array(y))
 
 
 
