@@ -127,15 +127,46 @@ def chargeDur(cur,uid,timestamp):
 
 #Function to fit regression NN with one hidden layer
 def regression(X,y):
+	error=0
+	errorList =[]
 	print(X.shape,y.shape)
-	forest = rfr(n_estimators=30)
+	forest = rfr(n_estimators=20)
 	forest.fit(X,y)
-	for i in range(0,20):
+
+	for i in range(0,X.shape[0]):
 		a= np.transpose(X[i,:].reshape(X[i,:].shape[0],1))
 		
 		pr = forest.predict(a)
+		errorList.append(np.absolute(pr-y[i])*60)	
+		error += np.absolute(pr-y[i])*60
 		print(pr,y[i])
+	print('Average error in minutes: {0}'.format(error/X.shape[0]))
+	print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
 
+
+def regreNN(X,y):
+	error=0
+	errorList = []
+	layers_all = [('input',lasagne.layers.InputLayer),
+					('dense0',lasagne.layers.DenseLayer),
+					('output',lasagne.layers.DenseLayer)]
+
+	net = NeuralNet(layers=layers_all,
+					input_shape=(None,X.shape[1]),
+					regression=True,
+					dense0_num_units=6,
+					output_nonlinearity=None,
+					update_learning_rate=0.01,
+					max_epochs=650)
+
+	net.fit(X,y)
+	for i in range(0,X.shape[0]):
+		a = np.transpose(X[i,:].reshape(X[i,:].shape[0],1))
+		pr = net.predict(a)
+		errorList.append(np.absolute(pr-y[i])*60)	
+		error += np.absolute(pr-y[i])*60
+	print('Average error in minutes: {0}'.format(error/X.shape[0]))
+	print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
 
 
 
@@ -152,17 +183,13 @@ def main(argv):
 
 
 
-	if sys.argv[1]=='-train':
-		
-
-		#X = np.empty((len(uids1),4),dtype='float32')
+	if sys.argv[1]=='-train':	
 		X =[]
 		y= []
 		for trainUser in uids1:
 			print(trainUser)
 			sleepL = loadSleepLabels(cur,trainUser)
-			y += [item[0] for item in sleepL]
-
+ 
 			# Computing five features to be used for regression of Sleep time, during night epoch:
 			# 1) Total time phone stayed in dark environment (darkDur)
 			# 2) Total time phone remained locked (sld)
@@ -171,50 +198,38 @@ def main(argv):
 			# 5) Total charge time
 
 			for i in range(0,len(sleepL)):
-
-				sld = screenLockDur(cur,trainUser,sleepL[i][1])
-				
+				# the following variables hold the 5 aforementioned features
+				# which are appended to X list, later transformed to Xtrain matrix
+				sld = screenLockDur(cur,trainUser,sleepL[i][1])				
 				statDur = stationaryDur(cur,trainUser,sleepL[i][1])
-				
-			#	silDur = silenceDur(cur,trainUser,sleepL[i][1])
+				silDur = silenceDur(cur,trainUser,sleepL[i][1])
 				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
 				chDur = chargeDur(cur,trainUser,sleepL[i][1])
-				#print([sld,statDur,darkDur])
-				X.append( [sld,statDur,darkDur])
-				#convS = conversationStats( cur, trainUser, sleepL[i][1])
-				#colS = colocationStats(cur,trainUser,sleepL[i][1])
 
-				#FV = np.concatenate((convS,colS),axis=0)
-				#np.append(FV,(sld,statD))
-			#print(X)
-			#print('----------')
-			#print(y)
-		
+				X.append( [sld,darkDur,statDur,silDur,chDur])
+			
+			
+		# In the following steps, Nan values are replaced with zeros and
+		# feature vectors are normalized (zero mena, std 1)
 		Xtrain = np.nan_to_num(X)
 		Xtrain1 = np.empty((Xtrain.shape[0],Xtrain.shape[1]),dtype='float32')
-		print(Xtrain[1,:])
+		deleteList = []
 		for i in range(0,Xtrain.shape[0]):
 
 			if np.std(Xtrain[i,:])>0:
 				Xtrain1[i,:] = (Xtrain[i,:]-np.mean(Xtrain[i,:]))/np.std(Xtrain[i,:])
-		print(Xtrain1[1,:])
+			else:
+				deleteList.append(i)
 
-		regression(Xtrain1,np.array(y))
-
-
-
-		#do stuff
+		#deleting all 'defective' training examples
+		Xtrain1 = np.delete(Xtrain1,deleteList,0)
+		y1=np.array(y)
+		y1=np.delete(y1,deleteList)
+	
 		
 
-
-
-
-
-
-
-
-
-
+		regression(Xtrain1,y1)
+		#regreNN(Xtrain1,np.array(y))
 
 
 
