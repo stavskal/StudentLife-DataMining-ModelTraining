@@ -53,12 +53,12 @@ def stationaryDur(cur,uid,timestamp):
 	cur.execute('SELECT * FROM {0} WHERE time_stamp>={1} AND time_stamp<={2}'.format(uidS, timestamp-86400, timestamp) )
 	records = cur.fetchall()
 	
-	tStart = [item[0] for item in records]
-	timeEpochs = epochCalc(tStart)
+	#tStart = [item[0] for item in records]
+	#timeEpochs = epochCalc(tStart)
 
 	for i in range(1,len(records)):
 		# if two consecutive samples are the same and equal to zero (stationary) then calculate duration
-		if records[i-1][1] == records[i][1] and records[i][1]==0 and timeEpochs[i][0]=='night':
+		if records[i-1][1] == records[i][1] and records[i][1]==0:
 		
 			totalDur += records[i][0] - records[i-1][0] 
 
@@ -73,13 +73,13 @@ def silenceDur(cur,uid,timestamp):
 	cur.execute('SELECT * FROM {0} WHERE time_stamp>={1} AND time_stamp<={2}'.format(uidSil, timestamp-86400, timestamp) )
 	records = cur.fetchall()
 
-	tStart = [item[0] for item in records]
-	timeEpochs = epochCalc(tStart)
+	#tStart = [item[0] for item in records]
+	#timeEpochs = epochCalc(tStart)
 
 	for i in range(1,len(records)):
 		#if two consecutive samples are the same and equal to zero, also in night then their duration
 		# is added to the total silence duration
-		if records[i-1][1] == records[i][1] and records[i][1]==0 and timeEpochs[i][0]=='night':
+		if records[i-1][1] == records[i][1] and records[i][1]==0:
 			totalDur += records[i][0] - records[i-1][0] 
 
 	return totalDur
@@ -183,17 +183,11 @@ def main(argv):
 				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
 				chDur = chargeDur(cur,trainUser,sleepL[i][1])
 
-				#X.append( [sld,darkDur,statDur,silDur,chDur])
-				
-				convS = conversationStats( cur, trainUser, sleepL[i][1])
-				colS = colocationStats(cur,trainUser,sleepL[i][1])
-
-				FV = np.concatenate((convS,colS),axis=0)
-				np.append(FV,(sld,darkDur,statDur,silDur,chDur))
-				X.append(FV)
-			
+				X.append( [sld,darkDur,statDur,silDur,chDur])
+		
 		# In the following steps, Nan values are replaced with zeros and
 		# feature vectors are normalized (zero mena, std 1)
+		# Also skewed FVs are removed from Train Matrix
 		Xtrain = np.nan_to_num(X)
 		Xtrain1 = np.empty((Xtrain.shape[0],Xtrain.shape[1]),dtype='float32')
 		deleteList = []
@@ -212,9 +206,8 @@ def main(argv):
 	
 		
 
-		#regression(Xtrain1,y1)
-		regreNN(Xtrain1,y1)
-
+		regression(Xtrain1,y1)
+		
 
 
 
