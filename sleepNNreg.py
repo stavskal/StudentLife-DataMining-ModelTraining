@@ -144,32 +144,6 @@ def regression(X,y):
 	print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
 
 
-def regreNN(X,y):
-	error=0
-	errorList = []
-	layers_all = [('input',lasagne.layers.InputLayer),
-					('dense0',lasagne.layers.DenseLayer),
-					('output',lasagne.layers.DenseLayer)]
-
-	net = NeuralNet(layers=layers_all,
-					input_shape=(None,X.shape[1]),
-					regression=True,
-					dense0_num_units=6,
-					output_nonlinearity=None,
-					update_learning_rate=0.01,
-					max_epochs=650)
-
-	net.fit(X,y)
-	for i in range(0,X.shape[0]):
-		a = np.transpose(X[i,:].reshape(X[i,:].shape[0],1))
-		pr = net.predict(a)
-		errorList.append(np.absolute(pr-y[i])*60)	
-		error += np.absolute(pr-y[i])*60
-	print('Average error in minutes: {0}'.format(error/X.shape[0]))
-	print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
-
-
-
 
 def main(argv):
 	#connecting to database with error handling
@@ -183,14 +157,17 @@ def main(argv):
 
 
 
-	if sys.argv[1]=='-train':	
+	if sys.argv[1]=='-train':
+	
+		#X = np.empty((len(uids1),4),dtype='float32')
 		X =[]
 		y= []
 		for trainUser in uids1:
 			print(trainUser)
 			sleepL = loadSleepLabels(cur,trainUser)
- 
-			# Computing five features to be used for regression of Sleep time, during night epoch:
+ 			y += [item[0] for item in sleepL] 
+
+			# computing five features to be used for regression of Sleep time, during night epoch:
 			# 1) Total time phone stayed in dark environment (darkDur)
 			# 2) Total time phone remained locked (sld)
 			# 3) Total time audio classifier outputed silence (silDur)
@@ -206,8 +183,14 @@ def main(argv):
 				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
 				chDur = chargeDur(cur,trainUser,sleepL[i][1])
 
-				X.append( [sld,darkDur,statDur,silDur,chDur])
-			
+				#X.append( [sld,darkDur,statDur,silDur,chDur])
+				
+				convS = conversationStats( cur, trainUser, sleepL[i][1])
+				colS = colocationStats(cur,trainUser,sleepL[i][1])
+
+				FV = np.concatenate((convS,colS),axis=0)
+				np.append(FV,(sld,darkDur,statDur,silDur,chDur))
+				X.append(FV)
 			
 		# In the following steps, Nan values are replaced with zeros and
 		# feature vectors are normalized (zero mena, std 1)
@@ -215,11 +198,12 @@ def main(argv):
 		Xtrain1 = np.empty((Xtrain.shape[0],Xtrain.shape[1]),dtype='float32')
 		deleteList = []
 		for i in range(0,Xtrain.shape[0]):
-
 			if np.std(Xtrain[i,:])>0:
 				Xtrain1[i,:] = (Xtrain[i,:]-np.mean(Xtrain[i,:]))/np.std(Xtrain[i,:])
 			else:
 				deleteList.append(i)
+
+
 
 		#deleting all 'defective' training examples
 		Xtrain1 = np.delete(Xtrain1,deleteList,0)
@@ -228,8 +212,8 @@ def main(argv):
 	
 		
 
-		regression(Xtrain1,y1)
-		#regreNN(Xtrain1,np.array(y))
+		#regression(Xtrain1,y1)
+		regreNN(Xtrain1,y1)
 
 
 
