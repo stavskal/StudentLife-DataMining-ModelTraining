@@ -27,7 +27,7 @@ def loadSleepLabels(cur,uid):
 
 	cur.execute('SELECT hour,time_stamp FROM {0}'.format(uid))
 	records = cur.fetchall()
-	records = sorted(records,key=lambda x:x[1])
+	#records = sorted(records,key=lambda x:x[1])
 	return(np.array(records)) 
 
 
@@ -45,8 +45,8 @@ def screenLockDur(cur,uid,timestamp):
 
 	
 	for i in range(0,len(tStart)):
-		if timeEpochs[i][0] =='night':
-			totalDur += records[i][1] -records[i][0]
+		#if timeEpochs[i][0] =='night':
+		totalDur += records[i][1] -records[i][0]
 
 	return(totalDur)
 
@@ -64,9 +64,8 @@ def stationaryDur(cur,uid,timestamp):
 
 	for i in range(1,len(records)):
 		# if two consecutive samples are the same and equal to zero (stationary) then calculate duration
-		if records[i-1][1] == records[i][1] and records[i][1]==0 and timeEpochs[i][0]=='night':
-		
-			totalDur += records[i][0] - records[i-1][0] 
+		if records[i][1]==0:
+			totalDur += 1
 
 	return totalDur
 
@@ -83,10 +82,10 @@ def silenceDur(cur,uid,timestamp):
 	timeEpochs = epochCalc(tStart)
 
 	for i in range(1,len(records)):
-		#if two consecutive samples are the same and equal to zero, also in night then their duration
+		# if two consecutive samples are the same and equal to zero, also in night then their duration
 		# is added to the total silence duration
-		if records[i-1][1] == records[i][1] and records[i][1]==0 and timeEpochs[i][0]=='night':
-			totalDur += records[i][0] - records[i-1][0] 
+		if records[i][1]==0:
+			totalDur += 1 
 
 	return totalDur
 
@@ -101,14 +100,16 @@ def darknessDur(cur,uid,timestamp):
 
 	#timeEpochs holds tuples of timestamps and their according epochs
 	tStart = [item[0] for item in records]
+	tStop = [item[1] for item in records]
 	timeEpochs = epochCalc(tStart)
+	timeEpochs1 = epochCalc(tStop)
+
 
 	for i in range(0,len(records)):
+		if timeEpochs[i][0]=='night' or timeEpochs1[i][0]=='night':
+			totalDur += records[i][1] - records[i][0]
 
-		if timeEpochs[i][0]=='night':
-			totalDur += records[i][1] - records[i][0] 
-
-	return totalDur
+	return np.absolute(totalDur)
 
 
 # returns total charge time during nigth epoch
@@ -122,10 +123,13 @@ def chargeDur(cur,uid,timestamp):
 
 	#timeEpochs holds tuples of timestamps and their according epochs
 	tStart = [item[0] for item in records]
+	tStop = [item[1] for item in records]
 	timeEpochs = epochCalc(tStart)
+	timeEpochs1 = epochCalc(tStop)
+
 
 	for i in range(0,len(records)):
-		if timeEpochs[i][0]=='night':
+		if timeEpochs[i][0]=='night' or timeEpochs1[i][0]=='night':
 			totalDur += records[i][1] - records[i][0]
 
 	return totalDur
@@ -160,80 +164,88 @@ def regression(X,y):
 	print(X.shape,y.shape)
 	score = 0
 	folds=3
-	forest = rfr(n_estimators=50)
-	logr= LogisticRegression(multi_class='multinomial',solver='lbfgs')
-	lin = LinearRegression()
-	for est in [forest,lin]:
-		print(est)
-		# Ensuring label percentage balance when K-folding
-		skf = KFold( X.shape[0], n_folds=folds)
-		for train_index,test_index in skf:
-			Xtrain,Xtest = X[train_index], X[test_index]
-			ytrain,ytest = y[train_index], y[test_index]
+	forest = rfr(n_estimators=10)
+		
+	# Ensuring label percentage balance when K-folding
+	skf = KFold( X.shape[0], n_folds=folds)
+	for train_index,test_index in skf:
+		Xtrain,Xtest = X[train_index], X[test_index]
+		ytrain,ytest = y[train_index], y[test_index]
+		
+		Xtrain = np.array(Xtrain,dtype='float64')
+		Xtest = np.array(Xtest,dtype='float64')
+		#Xtrain[np.isinf(Xtrain)] = 0
+		forest.fit(Xtrain,ytrain)
+
+
+		error=0
+		errorList =[]
+		predictions= []
+		for i in range(0,Xtest.shape[0]):
+			a= np.transpose(Xtest[i,:].reshape(Xtest[i,:].shape[0],1))
 			
-			Xtrain = np.array(Xtrain,dtype='float64')
-			Xtest = np.array(Xtest,dtype='float64')
-			#Xtrain[np.isinf(Xtrain)] = 0
-			est.fit(Xtrain,ytrain)
+			pr = forest.predict(a)
+			temp_err=np.absolute(pr-ytest[i])*60
+			errorList.append(temp_err)	
+			predictions.append(pr)
+			error += temp_err
 
-
-			error=0
-			errorList =[]
-			predictions= []
-			for i in range(0,Xtest.shape[0]):
-				a= np.transpose(Xtest[i,:].reshape(Xtest[i,:].shape[0],1))
-			
-				pr = est.predict(a)
-				temp_err=np.absolute(pr-ytest[i])*60
-				if temp_err>100:
-					print(temp_err,ytest[i])
-				errorList.append(temp_err)	
-				predictions.append(pr)
-
-				error += temp_err
-
-			print('Average error in minutes: {0}'.format(error/Xtest.shape[0]))
-			print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
-			del errorList[:]
-			del predictions[:]
+		print('Average error in minutes: {0}'.format(error/Xtest.shape[0]))
+		print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
+		del errorList[:]
+		del predictions[:]
 
 
 
 
 def regressNN(X,y):
 	layers_all = [('input',InputLayer),
-				   ('dense0', DenseLayer),
+				   ('dense',DenseLayer),
 				   	('output',DenseLayer)]
 
 	net = NeuralNet(layers = layers_all,
  					 input_shape = (None,X.shape[1]),
-					 dense0_num_units = 10,
+					 dense_num_units=3,
+					 dense_nonlinearity=None,
 					 regression=True,
 					 update_momentum=0.9,
-					 update_learning_rate=0.01,
+					 update_learning_rate=0.001,
 	 				 output_nonlinearity=None,
  					 output_num_units=1,
- 					 max_epochs=150,
- 					 verbose=1)
+ 					 max_epochs=150)
 
 	print(X.shape,y.shape)
-	net.fit(X,y)
-	print(net.score(X,y))
-	print('training is over')
-
-	train_loss = np.array([i["train_loss"] for i in net.train_history_])
-	valid_loss = np.array([i["valid_loss"] for i in net.train_history_])
-	pyp.plot(train_loss, linewidth=3, label="train")
-	pyp.plot(valid_loss, linewidth=3, label="valid")
-	pyp.grid()
-	pyp.legend()
-	pyp.xlabel("epoch")
-	pyp.ylabel("loss")
-	#pyplot.ylim(1e-3, 1e-2)
-	pyp.yscale("log")
-	pyp.savefig('trainNN.png')
+	#net.fit(X,y)
+	folds=3
+	skf = KFold( X.shape[0], n_folds=folds)
+	for train_index,test_index in skf:
+		Xtrain,Xtest = X[train_index], X[test_index]
+		ytrain,ytest = y[train_index], y[test_index]
+		
+		Xtrain = np.array(Xtrain,dtype='float64')
+		Xtest = np.array(Xtest,dtype='float64')
+		#Xtrain[np.isinf(Xtrain)] = 0
+		net.fit(Xtrain,ytrain)
 
 
+		error=0
+		errorList =[]
+		predictions= []
+		for i in range(0,Xtest.shape[0]):
+			a= np.transpose(Xtest[i,:].reshape(Xtest[i,:].shape[0],1))
+			
+			pr = net.predict(a)
+			temp_err=np.absolute(pr-ytest[i])*60
+			errorList.append(temp_err)	
+			predictions.append(pr)
+			error += temp_err
+
+		print('Average error in minutes: {0}'.format(error/Xtest.shape[0]))
+		print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
+		del errorList[:]
+		del predictions[:]
+
+	
 def main(argv):
 	#connecting to database with error handling
 	try:
@@ -269,13 +281,14 @@ def main(argv):
 				sld = screenLockDur(cur,trainUser,sleepL[i][1])				
 				statDur = stationaryDur(cur,trainUser,sleepL[i][1])
 				silDur = silenceDur(cur,trainUser,sleepL[i][1])
-				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
-				chDur = chargeDur(cur,trainUser,sleepL[i][1])
-
-				X.append( [sld,darkDur,statDur,silDur])
+				#darkDur = darknessDur(cur,trainUser,sleepL[i][1])
+				#chDur = chargeDur(cur,trainUser,sleepL[i][1])
+			
+				#print([sld,darkDur,silDur,statDur],sleepL[i][0])
+				X.append( [sld,silDur,statDur])
 		
 		# In the following steps, Nan values are replaced with zeros and
-		# feature vectors are normalized (zero mena, std 1)
+		# features are normalized (zero mena, std 1)
 		# Also skewed FVs are removed from Train Matrix
 		Xtrain = np.nan_to_num(X)
 		Xtrain1 = np.empty((Xtrain.shape[0],Xtrain.shape[1]),dtype='float32')
@@ -283,7 +296,6 @@ def main(argv):
 		for i in range(0,Xtrain.shape[1]):
 			if np.std(Xtrain[:,i])<0.01:
 				deleteList.append(i)
-
 
 
 		#deleting all 'defective' training examples
@@ -296,6 +308,7 @@ def main(argv):
 		
 		#regressNN(Xtrain2,y1)
 		regression(Xtrain1,y1)
+		regression(Xtrain2,y1)
 		
 
 
