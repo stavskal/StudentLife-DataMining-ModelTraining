@@ -2,14 +2,20 @@ import json,csv,sys,os,psycopg2
 import numpy as np
 from collections import Counter 
 from processingFunctions import *
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as pyp
 import time
 from sklearn.ensemble import RandomForestRegressor as rfr
-from sklearn.linear_model import LogisticRegression as lr
+from sklearn.linear_model import LogisticRegression ,LinearRegression
 import theano
 import theano.tensor as T
-from nolearn.lasagne import NeuralNet
+from nolearn.lasagne import NeuralNet, TrainSplit
+from nolearn.lasagne.visualize import plot_loss
 import lasagne
+from lasagne.layers import InputLayer
+from lasagne.layers import DenseLayer
+import seaborn as sns
+from sklearn import preprocessing, linear_model
+from sklearn.cross_validation import cross_val_score, KFold
 # -----------------------------------------------------------------------------------
 # This script is intended to train a non-linear estimator for sleep time during nights
 # Multi-Layer Perceptron will be used for the estimation (sklearn)
@@ -53,12 +59,12 @@ def stationaryDur(cur,uid,timestamp):
 	cur.execute('SELECT * FROM {0} WHERE time_stamp>={1} AND time_stamp<={2}'.format(uidS, timestamp-86400, timestamp) )
 	records = cur.fetchall()
 	
-	#tStart = [item[0] for item in records]
-	#timeEpochs = epochCalc(tStart)
+	tStart = [item[0] for item in records]
+	timeEpochs = epochCalc(tStart)
 
 	for i in range(1,len(records)):
 		# if two consecutive samples are the same and equal to zero (stationary) then calculate duration
-		if records[i-1][1] == records[i][1] and records[i][1]==0:
+		if records[i-1][1] == records[i][1] and records[i][1]==0 and timeEpochs[i][0]=='night':
 		
 			totalDur += records[i][0] - records[i-1][0] 
 
@@ -73,13 +79,13 @@ def silenceDur(cur,uid,timestamp):
 	cur.execute('SELECT * FROM {0} WHERE time_stamp>={1} AND time_stamp<={2}'.format(uidSil, timestamp-86400, timestamp) )
 	records = cur.fetchall()
 
-	#tStart = [item[0] for item in records]
-	#timeEpochs = epochCalc(tStart)
+	tStart = [item[0] for item in records]
+	timeEpochs = epochCalc(tStart)
 
 	for i in range(1,len(records)):
 		#if two consecutive samples are the same and equal to zero, also in night then their duration
 		# is added to the total silence duration
-		if records[i-1][1] == records[i][1] and records[i][1]==0:
+		if records[i-1][1] == records[i][1] and records[i][1]==0 and timeEpochs[i][0]=='night':
 			totalDur += records[i][0] - records[i-1][0] 
 
 	return totalDur
@@ -125,24 +131,107 @@ def chargeDur(cur,uid,timestamp):
 	return totalDur
 
 
-#Function to fit regression NN with one hidden layer
+def visualize(y,errorList,predictions):
+	y1=list(y)
+	pyp.figure()
+	#y1,pr = zip(*sorted(zip(y1,pr)))
+	y1,errorList = zip(*sorted(zip(y1,errorList)))
+
+	y1,predictions = zip(*sorted(zip(y1,predictions)))
+	xA = np.linspace(0,len(y1),len(y1))
+
+	pyp.plot(xA,y1,'g--',label='Labels')	
+	#pyp.plot(xA,errorList,'r')
+	pyp.plot(xA,predictions,'b--',label='Estimation')
+	pyp.plot(xA,errorList,'r--',label='Error')
+
+
+	pyp.title('Sleep Duration Estimation with RandomForestRegressor')
+	pyp.xlabel(' User Reports')
+	pyp.ylabel('Hours slept (sorted)')
+	pyp.legend(loc=2)
+
+
+
+
+#Function to fit regression Random Forest
 def regression(X,y):
-	error=0
-	errorList =[]
+	
 	print(X.shape,y.shape)
-	forest = rfr(n_estimators=20)
-	forest.fit(X,y)
+	score = 0
+	folds=3
+	forest = rfr(n_estimators=50)
+	logr= LogisticRegression(multi_class='multinomial',solver='lbfgs')
+	lin = LinearRegression()
+	for est in [forest,lin]:
+		print(est)
+		# Ensuring label percentage balance when K-folding
+		skf = KFold( X.shape[0], n_folds=folds)
+		for train_index,test_index in skf:
+			Xtrain,Xtest = X[train_index], X[test_index]
+			ytrain,ytest = y[train_index], y[test_index]
+			
+			Xtrain = np.array(Xtrain,dtype='float64')
+			Xtest = np.array(Xtest,dtype='float64')
+			#Xtrain[np.isinf(Xtrain)] = 0
+			est.fit(Xtrain,ytrain)
 
-	for i in range(0,X.shape[0]):
-		a= np.transpose(X[i,:].reshape(X[i,:].shape[0],1))
-		
-		pr = forest.predict(a)
-		errorList.append(np.absolute(pr-y[i])*60)	
-		error += np.absolute(pr-y[i])*60
-		print(pr,y[i])
-	print('Average error in minutes: {0}'.format(error/X.shape[0]))
-	print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
 
+			error=0
+			errorList =[]
+			predictions= []
+			for i in range(0,Xtest.shape[0]):
+				a= np.transpose(Xtest[i,:].reshape(Xtest[i,:].shape[0],1))
+			
+				pr = est.predict(a)
+				temp_err=np.absolute(pr-ytest[i])*60
+				if temp_err>100:
+					print(temp_err,ytest[i])
+				errorList.append(temp_err)	
+				predictions.append(pr)
+
+				error += temp_err
+
+			print('Average error in minutes: {0}'.format(error/Xtest.shape[0]))
+			print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
+			del errorList[:]
+			del predictions[:]
+
+
+
+
+def regressNN(X,y):
+	layers_all = [('input',InputLayer),
+				   ('dense0', DenseLayer),
+				   	('output',DenseLayer)]
+
+	net = NeuralNet(layers = layers_all,
+ 					 input_shape = (None,X.shape[1]),
+					 dense0_num_units = 10,
+					 regression=True,
+					 update_momentum=0.9,
+					 update_learning_rate=0.01,
+	 				 output_nonlinearity=None,
+ 					 output_num_units=1,
+ 					 max_epochs=150,
+ 					 verbose=1)
+
+	print(X.shape,y.shape)
+	net.fit(X,y)
+	print(net.score(X,y))
+	print('training is over')
+
+	train_loss = np.array([i["train_loss"] for i in net.train_history_])
+	valid_loss = np.array([i["valid_loss"] for i in net.train_history_])
+	pyp.plot(train_loss, linewidth=3, label="train")
+	pyp.plot(valid_loss, linewidth=3, label="valid")
+	pyp.grid()
+	pyp.legend()
+	pyp.xlabel("epoch")
+	pyp.ylabel("loss")
+	#pyplot.ylim(1e-3, 1e-2)
+	pyp.yscale("log")
+	pyp.savefig('trainNN.png')
 
 
 def main(argv):
@@ -183,7 +272,7 @@ def main(argv):
 				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
 				chDur = chargeDur(cur,trainUser,sleepL[i][1])
 
-				X.append( [sld,darkDur,statDur,silDur,chDur])
+				X.append( [sld,darkDur,statDur,silDur])
 		
 		# In the following steps, Nan values are replaced with zeros and
 		# feature vectors are normalized (zero mena, std 1)
@@ -191,10 +280,8 @@ def main(argv):
 		Xtrain = np.nan_to_num(X)
 		Xtrain1 = np.empty((Xtrain.shape[0],Xtrain.shape[1]),dtype='float32')
 		deleteList = []
-		for i in range(0,Xtrain.shape[0]):
-			if np.std(Xtrain[i,:])>0:
-				Xtrain1[i,:] = (Xtrain[i,:]-np.mean(Xtrain[i,:]))/np.std(Xtrain[i,:])
-			else:
+		for i in range(0,Xtrain.shape[1]):
+			if np.std(Xtrain[:,i])<0.01:
 				deleteList.append(i)
 
 
@@ -203,9 +290,11 @@ def main(argv):
 		Xtrain1 = np.delete(Xtrain1,deleteList,0)
 		y1=np.array(y)
 		y1=np.delete(y1,deleteList)
+
+		Xtrain2 = preprocessing.scale(Xtrain1)
 	
 		
-
+		#regressNN(Xtrain2,y1)
 		regression(Xtrain1,y1)
 		
 
