@@ -16,6 +16,8 @@ from lasagne.layers import DenseLayer
 import seaborn as sns
 from sklearn import preprocessing, linear_model
 from sklearn.cross_validation import cross_val_score, KFold
+from tempfile import TemporaryFile
+
 # -----------------------------------------------------------------------------------
 # This script is intended to train a non-linear estimator for sleep time during nights
 # Multi-Layer Perceptron will be used for the estimation (sklearn)
@@ -45,8 +47,8 @@ def screenLockDur(cur,uid,timestamp):
 
 	
 	for i in range(0,len(tStart)):
-		#if timeEpochs[i][0] =='night':
-		totalDur += records[i][1] -records[i][0]
+		if timeEpochs[i][0] =='night':
+			totalDur += records[i][1] -records[i][0]
 
 	return(totalDur)
 
@@ -147,13 +149,15 @@ def visualize(y,errorList,predictions):
 	pyp.plot(xA,y1,'g--',label='Labels')	
 	#pyp.plot(xA,errorList,'r')
 	pyp.plot(xA,predictions,'b--',label='Estimation')
-	pyp.plot(xA,errorList,'r--',label='Error')
+	#pyp.plot(xA,errorList,'r--',label='Error')
 
 
 	pyp.title('Sleep Duration Estimation with RandomForestRegressor')
 	pyp.xlabel(' User Reports')
 	pyp.ylabel('Hours slept (sorted)')
 	pyp.legend(loc=2)
+	pyp.savefig('sleepEst.png')
+	var=raw_input('gimme something to love you:')
 
 
 
@@ -163,11 +167,11 @@ def regression(X,y):
 	
 	print(X.shape,y.shape)
 	score = 0
-	folds=3
-	forest = rfr(n_estimators=10)
+	folds=4
+	forest = rfr(n_estimators=5)
 		
 	# Ensuring label percentage balance when K-folding
-	skf = KFold( X.shape[0], n_folds=folds)
+	skf = KFold( X.shape[0],shuffle=True, n_folds=folds)
 	for train_index,test_index in skf:
 		Xtrain,Xtest = X[train_index], X[test_index]
 		ytrain,ytest = y[train_index], y[test_index]
@@ -185,10 +189,13 @@ def regression(X,y):
 			a= np.transpose(Xtest[i,:].reshape(Xtest[i,:].shape[0],1))
 			
 			pr = forest.predict(a)
+
 			temp_err=np.absolute(pr-ytest[i])*60
 			errorList.append(temp_err)	
 			predictions.append(pr)
 			error += temp_err
+
+		visualize(ytest,errorList,predictions)
 
 		print('Average error in minutes: {0}'.format(error/Xtest.shape[0]))
 		print('Max/min/median error: {0} , {1} , {2}'.format(max(errorList),min(errorList),np.median(errorList)))
@@ -258,7 +265,7 @@ def main(argv):
 
 
 
-	if sys.argv[1]=='-train':
+	if sys.argv[1]=='-load':
 	
 		#X = np.empty((len(uids1),4),dtype='float32')
 		X =[]
@@ -281,38 +288,91 @@ def main(argv):
 				sld = screenLockDur(cur,trainUser,sleepL[i][1])				
 				statDur = stationaryDur(cur,trainUser,sleepL[i][1])
 				silDur = silenceDur(cur,trainUser,sleepL[i][1])
-				#darkDur = darknessDur(cur,trainUser,sleepL[i][1])
-				#chDur = chargeDur(cur,trainUser,sleepL[i][1])
+				darkDur = darknessDur(cur,trainUser,sleepL[i][1])
+				chDur = chargeDur(cur,trainUser,sleepL[i][1])
 			
 				#print([sld,darkDur,silDur,statDur],sleepL[i][0])
-				X.append( [sld,silDur,statDur])
+				X.append( [sld,silDur,statDur,darkDur,chDur])
 		
 		# In the following steps, Nan values are replaced with zeros and
-		# features are normalized (zero mena, std 1)
-		# Also skewed FVs are removed from Train Matrix
+		# features are normalized (zero mean, std 1)
+		# Also skewed FVs are 	removed from Train Matrix
 		Xtrain = np.nan_to_num(X)
-		Xtrain1 = np.empty((Xtrain.shape[0],Xtrain.shape[1]),dtype='float32')
 		deleteList = []
-		for i in range(0,Xtrain.shape[1]):
-			if np.std(Xtrain[:,i])<0.01:
+		for i in range(0,Xtrain.shape[0]):
+			if np.std(Xtrain[i,:])<0.01:
 				deleteList.append(i)
 
-
 		#deleting all 'defective' training examples
-		Xtrain1 = np.delete(Xtrain1,deleteList,0)
+		Xtrain1 = np.delete(Xtrain,deleteList,0)
 		y1=np.array(y)
 		y1=np.delete(y1,deleteList)
 
-		Xtrain2 = preprocessing.scale(Xtrain1)
-	
-		
-		#regressNN(Xtrain2,y1)
+		#Feature scaling
+		#Xtrain2 = preprocessing.scale(Xtrain1)
+
+		#saving data to file
+		#np.save('Xtrain2.npy',Xtrain2)
+		np.save('Xtrain1.npy',Xtrain1)
+		np.save('y.npy', y1 )
+
+
 		regression(Xtrain1,y1)
-		regression(Xtrain2,y1)
+		#regression(Xtrain2,y1)
+
+	elif sys.argv[1]=='-train':
+
+		Xtrain2 = np.load('Xtrain1.npy')
+		y = list(np.load('y.npy'))
+		statDur=[]
+		silDur=[]
+		screenDur=[]
+		for i in range(0,Xtrain2.shape[0]):
+
+			statDur.append( Xtrain2[i,2] )
+			silDur.append( Xtrain2[i,1] )
+			screenDur.append( Xtrain2[i,0] )
+
+
+
+		y1,statDur = zip(*sorted(zip(y,statDur)))
+		y1,silDur = zip(*sorted(zip(y,silDur)))
+		print(statDur)
+		print(silDur)
+		print(type(silDur[1]))
+
+		statDur = np.array(statDur)
+		silDur = np.array(silDur)
+		one = np.array(  zip(statDur,silDur) )
+		print(one)
+
+		statDur =  (statDur-np.mean(statDur))/np.std(statDur)
+		silDur =  (silDur-np.mean(silDur))/np.std(silDur)
+
+		sns.set(color_codes=True)
+		#ax= sns.regplot(x='Stationary',y='Silence',data=list(zip))
+		#fig = ax.get_figure()	
+		#fig.savefig('statsil.png')
 		
+		#xA = np.linspace(0,len(y1),len(y1))
+
+		pyp.plot(silDur,statDur,'ro')	
+		#pyp.plot(y1)
+		#pyp.plot(xA,errorList,'r')
+		#pyp.plot(xA,silDur,'b--',label='Estimation')
+		#pyp.plot(xA,errorList,'r--',label='Error')
 
 
+		pyp.title('Sleep Duration Estimation with RandomForestRegressor')
+		pyp.xlabel('Silence Duration')
+		pyp.ylabel('Stationary Duration')
+		#pyp.legend(loc=2)
+		pyp.savefig('featureVis1.png')
 
+
+		#regression(Xtrain1,y1)
+		#regression(Xtrain2,y1)
+#
 
 
 
