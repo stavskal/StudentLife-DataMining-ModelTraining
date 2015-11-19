@@ -209,23 +209,23 @@ def regressNN(X,y):
 	layers_all = [('input',InputLayer),
 				   ('dense',DenseLayer),
 				   	('output',DenseLayer)]
-
-	net = NeuralNet(layers = layers_all,
- 					 input_shape = (None,X.shape[1]),
-					 dense_num_units=3,
-					 dense_nonlinearity=None,
-					 regression=True,
-					 update_momentum=0.9,
-					 update_learning_rate=0.001,
-	 				 output_nonlinearity=None,
- 					 output_num_units=1,
- 					 max_epochs=150)
+	np.random.shuffle(X)
 
 	print(X.shape,y.shape)
 	#net.fit(X,y)
 	folds=3
 	skf = KFold( X.shape[0], n_folds=folds)
 	for train_index,test_index in skf:
+		net = NeuralNet(layers = layers_all,
+ 					 input_shape = (None,X.shape[1]),
+					 dense_num_units=2,
+					 dense_nonlinearity=None,
+					 regression=True,
+					 update_momentum=0.9,
+					 update_learning_rate=0.001,
+	 				 output_nonlinearity=None,
+ 					 output_num_units=1,
+ 					 max_epochs=100)
 		Xtrain,Xtest = X[train_index], X[test_index]
 		ytrain,ytest = y[train_index], y[test_index]
 		
@@ -322,56 +322,50 @@ def main(argv):
 
 	elif sys.argv[1]=='-train':
 
-		Xtrain2 = np.load('Xtrain1.npy')
+		Xtrain1 = np.load('Xtrain1.npy')
+		print(Xtrain1.shape)
+		Xtrain2 = np.empty((Xtrain1.shape[0],Xtrain1.shape[1]), dtype='float32')
 		y = list(np.load('y.npy'))
-		statDur=[]
-		silDur=[]
-		screenDur=[]
-		for i in range(0,Xtrain2.shape[0]):
-
-			statDur.append( Xtrain2[i,2] )
-			silDur.append( Xtrain2[i,1] )
-			screenDur.append( Xtrain2[i,0] )
-
-
-
-		y1,statDur = zip(*sorted(zip(y,statDur)))
-		y1,silDur = zip(*sorted(zip(y,silDur)))
-		print(statDur)
-		print(silDur)
-		print(type(silDur[1]))
-
-		statDur = np.array(statDur)
-		silDur = np.array(silDur)
-		one = np.array(  zip(statDur,silDur) )
-		print(one)
-
-		statDur =  (statDur-np.mean(statDur))/np.std(statDur)
-		silDur =  (silDur-np.mean(silDur))/np.std(silDur)
-
-		sns.set(color_codes=True)
-		#ax= sns.regplot(x='Stationary',y='Silence',data=list(zip))
-		#fig = ax.get_figure()	
-		#fig.savefig('statsil.png')
+		print(Xtrain2.shape)
 		
-		#xA = np.linspace(0,len(y1),len(y1))
+		i=0
+		for j in range(0,Xtrain1.shape[0]):
+			if y[j]<4:
+				print(Xtrain1[j,:])
+				i+=1
+			if i==10:
+				break
 
-		pyp.plot(silDur,statDur,'ro')	
-		#pyp.plot(y1)
-		#pyp.plot(xA,errorList,'r')
-		#pyp.plot(xA,silDur,'b--',label='Estimation')
-		#pyp.plot(xA,errorList,'r--',label='Error')
+		print('------------------')
+		i=0
+		for j in range(0,Xtrain1.shape[0]):
+			if y[j]>8:
+				print(Xtrain1[j,:])
+				i+=1
+			if i==10:
+				break
+			
 
 
-		pyp.title('Sleep Duration Estimation with RandomForestRegressor')
-		pyp.xlabel('Silence Duration')
-		pyp.ylabel('Stationary Duration')
-		#pyp.legend(loc=2)
-		pyp.savefig('featureVis1.png')
+
+
+
+
+		for i in range(0,Xtrain1.shape[1]):
+			Xtrain2[:,i] = (Xtrain1[:,i]- np.mean(Xtrain1[:,i]))/np.std(Xtrain1[:,i])
+
+	#	statDur=[]
+	#	silDur=[]
+	#	screenDur=[]
+		#for i in range(0,Xtrain2.shape[0]):
+
+		#	statDur.append( Xtrain2[i,2] )
+		#	silDur.append( Xtrain2[i,1] )
+		#	screenDur.append( Xtrain2[i,0] )
 
 
 		#regression(Xtrain1,y1)
-		#regression(Xtrain2,y1)
+	#	regressNN(Xtrain2,np.array(y))
 #
 
 
