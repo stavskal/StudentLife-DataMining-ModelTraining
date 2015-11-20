@@ -12,11 +12,11 @@ from sortedcontainers import SortedDict
 #---------------------------------------------
 
 
-# time lengths expressed in Seconds
+# time lengths expresses in Seconds
 hour = 3600
 day = 86400
 halfday = 43200
-weekSec = 604000	
+weekSec = 604000
 
 
 # List of all users in dataset
@@ -25,42 +25,31 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u56','u57','u58','u59']
 
 # List of 'good' users
-uids1=['u00','u24','u08','u57','u52','u51','u36','u59']
+uids1=['u00','u24','u08','u57','u52','u51','u36']
 
-uids2=['u00','u24']
 
 #---------------------------------------------------------------------------------------
 # converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
-def unixTimeConv(timestamps):
-	splitTimes = np.empty((len(timestamps), 7),dtype='float32')
-	i=0
-	for time in timestamps:
-		newTime = str(datetime.datetime.fromtimestamp(int(time)))
-		yearDate,timeT = newTime.split(' ')
-		year,month,day = yearDate.split('-')
-		hour,minutes,sec = timeT.split(':')
-	#	print(type(hour))
-		splitTimes[i,:] = (year,month,day,hour,minutes,sec,time)
-		i += 1
-
-	return (splitTimes)
+def unixTimeConv(timestamp):
+	newTime = str(datetime.datetime.fromtimestamp(int(timestamp)))
+	yearDate,timeT = newTime.split(' ')
+	year,month,day = yearDate.split('-')
+	hour,minutes,sec = timeT.split(':')
+	return (year,month,day,hour,minutes,sec)
 
 #----------------------------------------------------------------------------------------
 # converts timestamp to epoch (day,evening,night) pretty straightforward right?
-def epochCalc(timestamps):
-	splitTimes = unixTimeConv(timestamps)
-	epochTimes = []
-	for i in range(0,len(splitTimes)):
-		hour=int(splitTimes[i,3])
-		if hour >= 11 and hour <=21:
-			epoch='day'
-		else:
-			epoch='night'
+def epochCalc(timestamp):
+	year,month,day,hour,minutes,sec = unixTimeConv(timestamp)
+	hour=int(hour)
+	if hour >= 9 and hour <=18:
+		epoch='day'
+	elif hour>0 and hour <9:
+		epoch='night'
+	else:
+		epoch='evening'
 
-		epochTimes.append((epoch,splitTimes[i,6]))
-
-
-	return epochTimes
+	return epoch
 
 #-----------------------------------------------------------------------
 # computes average time between stress reports in order to find the optimal 
@@ -301,9 +290,6 @@ def conversationStats(cur,uid,timestamp):
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
 #t = 1366885867 
-#t1 = t+1000
-#t2= t1+5000
-#print(unixTimeConv((t,t1,t2)))
 #print(conversationStats(cur,'u00',t))
 
 
