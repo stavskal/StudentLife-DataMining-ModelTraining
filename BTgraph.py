@@ -12,9 +12,18 @@ insert1="INSERT INTO {0} (start_timestamp,end_timestamp	) VALUES ({1},{2})	;"
 create2= """CREATE TABLE {0} (time_stamp INT, activity INT) ; """
 insert2="INSERT INTO {0} (time_stamp, activity) VALUES ({1},{2})	;"
 
+create3= """CREATE TABLE {0} (time_stamp INT, audio INT) ; """
+insert3="INSERT INTO {0} (time_stamp, audio) VALUES ({1},{2})	;"
+
+create4= """CREATE TABLE {0} (start_timestamp INT, end_timestamp INT) ; """
+insert4="INSERT INTO {0} (start_timestamp,end_timestamp	) VALUES ({1},{2})	;"
+
 # IMPROTANT NOTE
 # MAC addresses are stored in their oct() form as strings
+usersadded=['u00','u24','u08','u57','u52','u51','u36','u59','u19','u46','u16','u44','u02']
 
+files =['audio_u00.csv','audio_u24.csv','audio_u08.csv','audio_u57.csv','audio_u52.csv','audio_u51.csv','audio_u36.csv','audio_u59.csv']
+files1 =['audio_u16.csv','audio_u44.csv','audio_u02.csv']
 
 
 # Parses data from CSV files to insert bluetooth scans in database tables
@@ -56,6 +65,26 @@ def dbInsertAct(csvfile,cur,tableName):
 				insertQ = insert2.format(uid,record['timestamp'], record[' activity inference'])
 				cur.execute(insertQ)
 
+def dbInsertAudio(csvfile,cur,tableName):
+	uid=(csvfile.split('_'))[1][0:3] +tableName
+	cur.execute(create3.format(uid))
+	print(create3.format(uid))
+	with open(csvfile,'rb') as inCsv:
+			parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
+			for record in parsed:
+				insertQ = insert3.format(uid,record['timestamp'], record[' audio inference'])
+				cur.execute(insertQ)
+
+def dbInsertCharge(csvfile,cur,tableName):
+	uid=(csvfile.split('_'))[1][0:3] +tableName
+	cur.execute(create4.format(uid))
+	print(create4.format(uid))
+	with open(csvfile,'rb') as inCsv:
+			parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
+			for record in parsed:
+				insertQ = insert4.format(uid,record['start'], record['end'])
+				cur.execute(insertQ)
+
 
 def main(argv):
 
@@ -94,8 +123,8 @@ def main(argv):
 			dbInsertCon(filename,cur,tableName)
 
 		
-	# if user choses '-insert1' then activity data will be loaded
-	elif sys.argv[1]=='-insert1':
+	# if user choses '-activity' then activity data will be loaded
+	elif sys.argv[1]=='-activity':
 		#setting directory to load app_usage information
 		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/sensing/activity'
 		tableName = 'act'
@@ -104,6 +133,27 @@ def main(argv):
 			filename = directory +'/'+ filename
 
 			dbInsertAct(filename,cur,tableName)
+
+
+	elif sys.argv[1]=='-audio':
+		#setting directory to load app_usage information
+		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/sensing/audio'
+		tableName = 'audio'
+		#inserting all files to database from given directory
+		for filename in files1:
+			filename = directory +'/'+ filename
+
+			dbInsertAudio(filename,cur,tableName)
+
+	elif sys.argv[1]=='-charge':
+		#setting directory to load app_usage information
+		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/sensing/phonecharge'
+		tableName = 'charge'
+		#inserting all files to database from given directory
+		for filename in os.listdir(directory):
+			filename = directory +'/'+ filename
+
+			dbInsertCharge(filename,cur,tableName)
 
 
 
@@ -134,6 +184,22 @@ def main(argv):
 			dropQ=drop.format(uid)
 			cur.execute(dropQ)
 
+		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/sensing/audio'
+
+		#inserting all files to database from given directory
+		for filename in os.listdir(directory):
+			uid=(filename.split('_'))[1][0:3]+'audio'
+			dropQ=drop.format(uid)
+			cur.execute(dropQ)
+
+
+		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/sensing/charge'
+
+		#inserting all files to database from given directory
+		for filename in os.listdir(directory):
+			uid=(filename.split('_'))[1][0:3]+'charge'
+			dropQ=drop.format(uid)
+			cur.execute(dropQ)
 
 
 	con.commit()
