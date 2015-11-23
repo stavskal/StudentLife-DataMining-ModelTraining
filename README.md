@@ -12,4 +12,4 @@ The collected Data is inserted into a PostgreSQL database schema into many diffe
  all the rest scripts are used to insert/drop tables in DB
  
  # requirements
- run `pip -r requirements.txt` insive Virtual Machine to automatically install all requirements
+ run `pip -r requirements.txt` inside a Virtual Environment to  install all requirements
