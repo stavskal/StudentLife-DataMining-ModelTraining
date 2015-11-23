@@ -21,7 +21,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58']
 
-uids1=['u12','u24','u08','u52','u51','u59','u57','u00','u02']
+uids1=['u59','u57','u02','u52','u16','u19','u44','u24','u51','u00','u08']
 
 ch = [120,100,70,50,35]
 
@@ -55,12 +55,14 @@ def main():
 	totalP=0
 	totalR=0
 	maxminAcc =[]
-	Xbig = np.zeros([1,19])	
+	Xbig = np.zeros([1,21])	
 	Ybig = np.ones([1])
 
 	# loso means leave one student out: forest is trained on other users data
 	# then tests are run on 'loso' student 
-	loso='u02'
+	loso='u08'
+	uids1.remove(loso)
+	uids1.append(loso)
 
 	for testUser in uids1:
 		print(testUser)
@@ -88,7 +90,7 @@ def main():
 
 		for i in range(0,len(records)):
 			colocationList.append( colocationStats(cur,testUser,X[i][0]))
-			conversationList.append( conversationStats(cur,testUser,X[i][0]))
+			conversationList.append( convEpochFeats(cur,testUser,X[i][0]))
 			activityList.append(activityFeats(cur,testUser,X[i][0]))
 			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
 
@@ -113,15 +115,17 @@ def main():
 			forest = RandomForestClassifier(n_estimators=100, n_jobs = -1)
 			forest.fit(Xbig,Ybig)
 			print('forest done')
-			
+
 		# when loso, test are run
 		elif testUser==loso:
-			ef = forest.score(Xtt,Y)
+			ef = forest.score(Xtt,ytest)
+			print(ef*100)
 
 			output = np.array(forest.predict(Xtt))
 			scored = output - np.array(ytest)
 
-			#Counting as correct predictions the ones which fall in +/-1, not only exact
+			# Counting as correct predictions the ones which fall in +/-1, not only exact
+			# I call it the 'Tolerance technique'
 			correct=0
 			c = Counter(scored)
 			for k in c.keys():
