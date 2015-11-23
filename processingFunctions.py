@@ -2,6 +2,7 @@ import datetime,psycopg2
 from collections import Counter
 import numpy as np
 from sortedcontainers import SortedDict
+from sklearn import preprocessing
 #---------------------------------------------
 #This script contains a collection of functions
 #that are useful in processing the data in
@@ -25,7 +26,7 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u56','u57','u58','u59']
 
 # List of 'good' users
-uids1=['u00','u24','u08','u57','u52','u51','u36']
+uids1=['u00','u02','u12','u24','u08','u57','u52','u51','u59']
 
 
 #---------------------------------------------------------------------------------------
@@ -153,7 +154,8 @@ def constructBOA(FVlist):
 	return(Xtrain)
 
 
-# Takes as input Matrix with rows of features and picks out the most common apps (columns)
+# Takes as input Matrix with rows of features and picks out the most common features (columns), filters
+# out the ones that occur the least
 # The average application usage is computed and the applications with the best average are kept
 def selectBestFeatures(X,mc):
 	# average of each column is in 'av'
@@ -221,14 +223,10 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 			featList.append(np.amax(timeOn))
 			featList.append(np.amax(timeOff))
 
-			# converting to np array for compatibility with other FVs
-			#return(np.array(featList))
-
 		else:
 			featList.extend( np.zeros(11) )
 	A= np.nan_to_num(featList)
-	if np.std(A)>0:
-		A = (A-np.mean(A))/np.std(A)
+	A=preprocessing.scale(A)
 	return(A)
 
 # Computes average number people(BT scans) for two periods in a day(first half and second half of day)
@@ -238,51 +236,69 @@ def colocationStats(cur,uid,timestamp):
 	for i in [0,1]:
 		total = 0
 
-		cur.execute("SELECT time_stamp,mac FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2}".format(uid+'bt',timestamp-(i+1)*halfday,timestamp-i*halfday))
+		cur.execute("SELECT time_stamp,mac FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2}".format(uid+'bt',timestamp-(i+1)*halfday,timestamp))
 		records = cur.fetchall() 
 
 		#By counting how many times each timestamp appeared, we get the number of nearby people
 		times =[item[0] for item in records]
-		#print(times)
+
 		if len(set(times)) >0:
 			uniqueTimes = list(set(times))
 
 			for t in uniqueTimes:
-				#print(times.count(t))
 				total += times.count(t)
-			#mean number of peo
-			#print(total, len(times))
-			meanCo[i] = float(total) / len(set(times))
-	meanCo = np.nan_to_num(meanCo)
+
+			meanCo[i] = float(total)
+		else:
+			meanCo[i]= 0
+
+	meanCo = preprocessing.scale( np.nan_to_num(meanCo) )
 	return(meanCo)
+
+
 
 def conversationStats(cur,uid,timestamp):
 	totalConvTime=np.zeros(2)
 	totalConvs = np.zeros(2)
 	totalFeats = np.empty(10)
 	for i in [0,1]:
-		cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-(i+1)*halfday,timestamp-i*halfday))
+		cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-(i+1)*halfday,timestamp))
 		records = cur.fetchall() 
 		timeCon = np.empty(len(records))
 
 		totalConvs[i] = len(records)
-		#this is the TRUE power of python
 		for j in range(0,len(records)):
 			timeCon[j] = records[j][1]-records[j][0]
 
+		#this is the TRUE power of python
 		totalConvTime[i] = sum([item[1]-item[0] for item in records])
-		#print(totalConvTime[i])
-	#print(np.std(timeCon),np.var(timeCon))
 	
-	a=np.concatenate((totalConvs,totalConvTime),axis=0)
-	a=np.append(a, np.var(timeCon))
-	a=np.append(a, np.std(timeCon))
-	a=np.nan_to_num(a)
-	if np.std(a)>0:
-		a = (a-np.mean(a))/np.std(a)
-	#print(a)
 	#concatenate 4 features in one nparray before returning
-	return(a)
+	feats=np.concatenate((totalConvs,totalConvTime),axis=0)
+	feats=np.nan_to_num(feats)
+	#if np.std(a)>0:
+	#	a = (a-np.mean(a))/np.std(a)
+	feats = preprocessing.scale(feats)
+	#print(a,a.shape)
+	return(feats)
+
+
+
+def activityFeats(cur,uid,timestamp):
+	totalDur = 0
+	statToMovingRatio = np.zeros(2)
+	uidS = uid +'act'
+	for i in [0,1]:
+		cur.execute('SELECT activity FROM {0} WHERE time_stamp >= {1} AND time_stamp<= {2}'.format(uidS,timestamp-(i+1)*halfday,timestamp))
+		records = cur.fetchall()
+		uniqueActivities = Counter(records)
+
+		#transforming keys cause of ugly return shape of Counter class
+		for k in uniqueActivities.keys():
+			uniqueActivities[k[0]] = uniqueActivities.pop(k)
+
+		statToMovingRatio[i] = uniqueActivities[0]/(uniqueActivities[1]+uniqueActivities[2]+1)
+	return(statToMovingRatio)
 
 #testing
 #con = psycopg2.connect(database='dataset', user='tabrianos')
@@ -290,6 +306,7 @@ def conversationStats(cur,uid,timestamp):
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
 #t = 1366885867 
+#activityFeats(cur,'u00',t)
 #print(conversationStats(cur,'u00',t))
 
 
