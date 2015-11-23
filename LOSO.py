@@ -42,16 +42,7 @@ def appStatsL(cur,uid,timestamp,timeWin):
 	return records
 
 
-
-
-
-
-
-
-
-
 def main():
-#testing
 	con = psycopg2.connect(database='dataset', user='tabrianos')
 	cur = con.cursor()
 	#warnings.simplefilter("error")
@@ -66,15 +57,22 @@ def main():
 	maxminAcc =[]
 	Xbig = np.zeros([1,19])	
 	Ybig = np.ones([1])
+
+	# loso means leave one student out: forest is trained on other users data
+	# then tests are run on 'loso' student 
 	loso='u02'
 
 	for testUser in uids1:
 		print(testUser)
+
+		# lists that temporary store features before concatenation
 		Xlist = []
 		ScreenList = []
 		colocationList =[]
 		conversationList =[]
 		activityList=[]
+
+		# loading stress labels from database (currently on 0-5 scale)
 		records = loadStressLabels(cur,testUser) 
 	
 
@@ -84,15 +82,14 @@ def main():
 		X = np.array(records)
 
 		# X is shuffled twice to ensure that the report sequence is close to random
-		#np.random.shuffle(X)
-		#np.random.shuffle(X)
+		np.random.shuffle(X)
+		np.random.shuffle(X)
 
 
 		for i in range(0,len(records)):
 			colocationList.append( colocationStats(cur,testUser,X[i][0]))
 			conversationList.append( conversationStats(cur,testUser,X[i][0]))
 			activityList.append(activityFeats(cur,testUser,X[i][0]))
-			#Xlist.append( appStatsL(cur,testUser,X[i][0],day) )
 			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
 
 			if testUser==loso:
@@ -102,10 +99,12 @@ def main():
 
 		
 
-		
+		#concatenating features in one array 
 		Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
 		print(Xtt.shape)
+
 		#initiating and training forest, n_jobs indicates threads, -1 means all available
+		# while the test student is not reached, training data are merged into one big matrix
 		if testUser!=loso:
 			Xbig = np.concatenate((Xbig,Xtt),axis=0)
 			Ybig = np.concatenate((Ybig,Y),axis=0)
@@ -114,14 +113,15 @@ def main():
 			forest = RandomForestClassifier(n_estimators=100, n_jobs = -1)
 			forest.fit(Xbig,Ybig)
 			print('forest done')
-
+			
+		# when loso, test are run
 		elif testUser==loso:
 			ef = forest.score(Xtt,Y)
 
 			output = np.array(forest.predict(Xtt))
 			scored = output - np.array(ytest)
 
-			#Counting as correct predictions the ones which fall in +/-1
+			#Counting as correct predictions the ones which fall in +/-1, not only exact
 			correct=0
 			c = Counter(scored)
 			for k in c.keys():
