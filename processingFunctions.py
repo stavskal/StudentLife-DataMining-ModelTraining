@@ -31,26 +31,34 @@ uids1=['u00','u02','u12','u24','u08','u57','u52','u51','u59']
 
 #---------------------------------------------------------------------------------------
 # converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
-def unixTimeConv(timestamp):
-	newTime = str(datetime.datetime.fromtimestamp(int(timestamp)))
-	yearDate,timeT = newTime.split(' ')
-	year,month,day = yearDate.split('-')
-	hour,minutes,sec = timeT.split(':')
-	return (year,month,day,hour,minutes,sec)
-
+def unixTimeConv(timestamps):
+	splitTimes = np.zeros((len(timestamps), 7),dtype='float32')
+	i=0
+	#print(timestamps)
+	for time in timestamps:
+		newTime = str(datetime.datetime.fromtimestamp(int(time)))
+		yearDate,timeT = newTime.split(' ')
+		year,month,day = str(yearDate).split('-')
+		hour,minutes,sec = timeT.split(':')
+		splitTimes[i,:] = (year,month,day,hour,minutes,sec,time)
+		i += 1
+	return(splitTimes)
 #----------------------------------------------------------------------------------------
 # converts timestamp to epoch (day,evening,night) pretty straightforward right?
-def epochCalc(timestamp):
-	year,month,day,hour,minutes,sec = unixTimeConv(timestamp)
-	hour=int(hour)
-	if hour >= 9 and hour <=18:
-		epoch='day'
-	elif hour>0 and hour <9:
-		epoch='night'
-	else:
-		epoch='evening'
-
-	return epoch
+def epochCalc(timestamps):
+	splitTimes = unixTimeConv(timestamps)
+	epochTimes = []
+	for i in range(0,len(splitTimes)):
+		hour=int(splitTimes[i,3])
+	#	print(hour)
+		if hour >9 and hour <=18:
+			epoch='day'
+		elif hour >0 and hour<=9:
+			epoch='night'
+		else:
+			epoch='evening'
+		epochTimes.append((epoch,splitTimes[i,6]))
+	return epochTimes
 
 #-----------------------------------------------------------------------
 # computes average time between stress reports in order to find the optimal 
@@ -167,10 +175,11 @@ def selectBestFeatures(X,mc):
 	return(X)
 
 
-# Screen time features are computed to enhance the training procedure
-# Possibly increase prediction accuracy
-# returned list contains 7 features
+
 def screenStatFeatures(cur,uid,timestamp,timeWin):
+	""" Screen time features are computed to enhance the training procedure
+		returned list contains 7 features
+	"""
 	featList = []
 	for i in ['lock']:
 		uidL= uid +i
@@ -229,9 +238,11 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 	A=preprocessing.scale(A)
 	return(A)
 
-# Computes average number people(BT scans) for two periods in a day(first half and second half of day)
-# Stats computed are always proceeding stress reports
+
 def colocationStats(cur,uid,timestamp):
+	""" Computes average number people(BT scans) for two periods in a day(first half and second half of day)
+	    Stats computed are always proceeding stress reports
+	"""
 	meanCo = np.zeros(2)
 	for i in [0,1]:
 		total = 0
@@ -273,14 +284,55 @@ def conversationStats(cur,uid,timestamp):
 		#this is the TRUE power of python
 		totalConvTime[i] = sum([item[1]-item[0] for item in records])
 	
-	#concatenate 4 features in one nparray before returning
+	# Concatenate 4 features in one nparray before returning
+	# Also zero mean, std 1 and remove nans
 	feats=np.concatenate((totalConvs,totalConvTime),axis=0)
 	feats=np.nan_to_num(feats)
-	#if np.std(a)>0:
-	#	a = (a-np.mean(a))/np.std(a)
 	feats = preprocessing.scale(feats)
-	#print(a,a.shape)
+
 	return(feats)
+
+
+
+def convEpochFeats(cur,uid,timestamp):
+	"""Returns total duration and number of conversations
+	   calculated in three epochs (day,evening,night)"""
+
+	cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-day,timestamp))
+	records = cur.fetchall()
+
+	totalConvsEvening=0
+	totalConvsDay=0
+	totalConvsNight=0
+
+	totalConvTimeE=0
+	totalConvTimeD = 0
+	totalConvTimeN=0
+
+	tStart = [item[0] for item in records]
+	tStop = [item[1] for item in records]
+
+	timeEpochs = epochCalc(tStart)
+	timeEpochs1 = epochCalc(tStop)
+
+	for i in range(0,len(records)):
+		if timeEpochs[i][0] in ['evening']:
+			totalConvsEvening += 1 
+			totalConvTimeE += records[i][1]-records[i][0]
+
+		if timeEpochs[i][0] in ['day']:
+			totalConvsDay += 1 
+			totalConvTimeD += records[i][1]-records[i][0]
+
+		if timeEpochs[i][0] in ['night']:
+			totalConvsNight += 1 
+			totalConvTimeN += records[i][1]-records[i][0]
+	
+	# concatenating all variables into FV vector		
+	FV = np.array((totalConvsEvening,totalConvsNight,totalConvsDay,totalConvTimeN,totalConvTimeD,totalConvTimeE))
+	return(FV)
+
+
 
 
 
@@ -300,13 +352,60 @@ def activityFeats(cur,uid,timestamp):
 		statToMovingRatio[i] = uniqueActivities[0]/(uniqueActivities[1]+uniqueActivities[2]+1)
 	return(statToMovingRatio)
 
+
+def activityEpochFeats(cur,uid,timestamp):
+	"""Returns stationary to moving ratio in three epochs 
+	"""
+	totalDur = 0
+	statToMovingRatio = np.zeros(3)
+	stationary = np.zeros(3)
+	moving = np.zeros(3)
+
+	#retrieving data
+	uidS = uid +'act'
+	cur.execute('SELECT time_stamp,activity FROM {0} WHERE time_stamp >= {1} AND time_stamp<= {2}'.format(uidS,timestamp-2*halfday,timestamp))
+	records = cur.fetchall()
+
+	tStart = [item[0] for item in records]
+	timeEpochs = (epochCalc(tStart))
+
+	# Scaning all records, if timestamp belongs to certain epoch then 
+	# the corresponding cell in stationary/moving arrays is incremented 
+	for i in range(0,len(records)):
+		if timeEpochs[i][0]=='day':
+			if records[i][1]==0:
+				stationary[0] += 1
+			else:
+				moving[0] += 1
+
+		if timeEpochs[i][0]=='evening':
+			if records[i][1]==0:
+				stationary[1] += 1
+			else:
+				moving[1] += 1
+
+		if timeEpochs[i][0]=='night':
+			if records[i][1]==0:
+				stationary[2] += 1
+			else:
+				moving[2] += 1
+
+	for i in range(0,3):
+		if moving[i]>0:
+			statToMovingRatio[i] = float(stationary[i]) / moving[i]
+		else:
+			statToMovingRatio[i] = 0
+
+	return(statToMovingRatio)
+
 #testing
-#con = psycopg2.connect(database='dataset', user='tabrianos')
-#cur = con.cursor()
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
-#t = 1366885867 
-#activityFeats(cur,'u00',t)
+t = 1366400395
+#print(convEpochFeats(cur,'u00',t))
+print(activityEpochFeats(cur,'u00',t))
 #print(conversationStats(cur,'u00',t))
 
 
