@@ -20,7 +20,8 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
 'u56','u57','u58','u59']
 
-uids1=['u00','u12','u19','u46','u59','u52','u57']
+#uids1=['u00','u12','u19','u46','u59','u52','u57','u59','u08']
+uids1=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52']
 
 ch = [120,100,70,50,35]
 
@@ -73,6 +74,7 @@ def main():
 	
 	for testUser in uids1:
 		Xlist = []
+		activityList = []
 		ScreenList = []
 		colocationList =[]
 		conversationList =[]
@@ -87,36 +89,31 @@ def main():
 
 		
 		#X,Y store initially the dataset and the labels accordingly
-		Y = np.empty(len(records))
+		Y = np.zeros(len(records))
 		X = np.array(records)
 
 		# X is shuffled twice to ensure that the report sequence is close to random
-		np.random.shuffle(X)
-		np.random.shuffle(X)
+		#np.random.shuffle(X)
+		#np.random.shuffle(X)
 
 		# Xlist contains Feature Vectors for Applications of different lengths according to each period
 		# ScreenList contains FVs regarding screen info, fixed length (=7) for same periods
 		t0 = time.time()
 		for i in range(0,len(records)):
-			colocationList.append( colocationStats(cur,testUser,X[i][0]))
-			conversationList.append( conversationStats(cur,testUser,X[i][0]))
-			#Xlist.append( appStatsL(cur,testUser,X[i][0],day) )
+			colocationList.append( colocationStats(cur,testUser,X[i][0]) )
+			conversationList.append( convEpochFeats(cur,testUser,X[i][0]) 	)
+			activityList.append( activityEpochFeats(cur,testUser,X[i][0])  )
 			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
 			Y[i] = X[i][1]
 
 		
 		t1 = time.time()
 
-		# Transforming Feature Vectors of different length to Bag-of-Apps (fixed)
-		# for training and testing, Xtt
-		#Xtt1 = constructBOA(Xlist)
-		#print('size of Xtt: {0}'.format(Xtt.shape))
-	#	Xtt1 = selectBestFeatures(Xtt1, Xtt1.shape[1]/2)
-		#print(Xtt.shape)
-		Xtt = np.concatenate((np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
+
+		Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
 		#print(Xtt[1,:])
 
-		print(Xtt.shape)
+		#print(Xtt)
 
 		
 
@@ -145,7 +142,7 @@ def main():
 			for k in c.keys():
 				if k<2 and k>-2:
 					correct += c[k]
-
+			
 			score += float(correct)/len(scored)
 
 
@@ -172,7 +169,7 @@ def main():
 		del Xlist[:]
 		del ScreenList[:]
 		#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))
-	print('Average accuracy: {0} %  most common: {1}'.format(float(acc)/len(uids1), 1))
+	print('Average accuracy: {0} % '.format(float(acc)/len(uids1)))
 	print('Max / Min accuracy: {0}%  / {1}% '.format(max(maxminAcc), min(maxminAcc)))
 	#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
 	#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
