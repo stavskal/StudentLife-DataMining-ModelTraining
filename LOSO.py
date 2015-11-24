@@ -48,96 +48,93 @@ def main():
 	#warnings.simplefilter("error")
 
 # ------------TEST CASE-----------------------------
+	for loso in uids1:
+		ytest=[]
+		accuracies =[]
+		acc=0
+		totalP=0
+		totalR=0
+		maxminAcc =[]
+		Xbig = np.zeros([1,21])	
+		Ybig = np.ones([1])
+		# loso means leave one student out: forest is trained on other users data
+		# then tests are run on 'loso' student 
+		uids1.remove(loso)
+		uids1.append(loso)
+		print('LOSO: {0}'.format(loso))
+		for testUser in uids1:
 
-	ytest=[]
-	accuracies =[]
-	acc=0
-	totalP=0
-	totalR=0
-	maxminAcc =[]
-	Xbig = np.zeros([1,21])	
-	Ybig = np.ones([1])
+			# lists that temporary store features before concatenation
+			Xlist = []
+			ScreenList = []
+			colocationList =[]
+			conversationList =[]
+			activityList=[]
 
-	# loso means leave one student out: forest is trained on other users data
-	# then tests are run on 'loso' student 
-	loso='u08'
-	uids1.remove(loso)
-	uids1.append(loso)
-
-	for testUser in uids1:
-		print(testUser)
-
-		# lists that temporary store features before concatenation
-		Xlist = []
-		ScreenList = []
-		colocationList =[]
-		conversationList =[]
-		activityList=[]
-
-		# loading stress labels from database (currently on 0-5 scale)
-		records = loadStressLabels(cur,testUser) 
-	
-
-		
-		#X,Y store initially the dataset and the labels accordingly
-		Y = np.empty(len(records))
-		X = np.array(records)
-
-		# X is shuffled twice to ensure that the report sequence is close to random
-		np.random.shuffle(X)
-		np.random.shuffle(X)
-
-
-		for i in range(0,len(records)):
-			colocationList.append( colocationStats(cur,testUser,X[i][0]))
-			conversationList.append( convEpochFeats(cur,testUser,X[i][0]))
-			activityList.append(activityFeats(cur,testUser,X[i][0]))
-			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
-
-			if testUser==loso:
-				ytest.append(X[i][1])
-
-			Y[i] = X[i][1]
-
+			# loading stress labels from database (currently on 0-5 scale)
+			records = loadStressLabels(cur,testUser) 
 		
 
-		#concatenating features in one array 
-		Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
-		print(Xtt.shape)
-
-		#initiating and training forest, n_jobs indicates threads, -1 means all available
-		# while the test student is not reached, training data are merged into one big matrix
-		if testUser!=loso:
-			Xbig = np.concatenate((Xbig,Xtt),axis=0)
-			Ybig = np.concatenate((Ybig,Y),axis=0)
 			
-			Xbig = Xbig.astype(np.float64)
-			forest = RandomForestClassifier(n_estimators=100, n_jobs = -1)
-			forest.fit(Xbig,Ybig)
-			print('forest done')
+			#X,Y store initially the dataset and the labels accordingly
+			Y = np.zeros(len(records))
+			X = np.array(records)
 
-		# when loso, test are run
-		elif testUser==loso:
-			ef = forest.score(Xtt,ytest)
-			print(ef*100)
+			# X is shuffled twice to ensure that the report sequence is close to random
+			np.random.shuffle(X)
+			np.random.shuffle(X)
 
-			output = np.array(forest.predict(Xtt))
-			scored = output - np.array(ytest)
 
-			# Counting as correct predictions the ones which fall in +/-1, not only exact
-			# I call it the 'Tolerance technique'
-			correct=0
-			c = Counter(scored)
-			for k in c.keys():
-				if k<2 and k>-2:
-					correct += c[k]
+			for i in range(0,len(records)):
+				colocationList.append( colocationStats(cur,testUser,X[i][0]))
+				conversationList.append( convEpochFeats(cur,testUser,X[i][0]))
+				activityList.append(activityFeats(cur,testUser,X[i][0]))
+				ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
+
+				if testUser==loso:
+					ytest.append(X[i][1])
+
+				Y[i] = X[i][1]
+
 			
-			score = float(correct)/len(scored)
-			print(score*100)
+
+			#concatenating features in one array 
+			Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
+			print(Xtt.shape)
+
+			#initiating and training forest, n_jobs indicates threads, -1 means all available
+			# while the test student is not reached, training data are merged into one big matrix
+			if testUser!=loso:
+				Xbig = np.concatenate((Xbig,Xtt),axis=0)
+				Ybig = np.concatenate((Ybig,Y),axis=0)
+				
+				Xbig = Xbig.astype(np.float64)
+				forest = RandomForestClassifier(n_estimators=100, n_jobs = -1)
+				forest.fit(Xbig,Ybig)
+				
+
+			# when loso, test are run
+			elif testUser==loso:
+				ef = forest.score(Xtt,ytest)
+				print(ef*100)
+
+				output = np.array(forest.predict(Xtt))
+				scored = output - np.array(ytest)
+
+				# Counting as correct predictions the ones which fall in +/-1, not only exact
+				# I call it the 'Tolerance technique'
+				correct=0
+				c = Counter(scored)
+				for k in c.keys():
+					if k<2 and k>-2:
+						correct += c[k]
+				
+				score = float(correct)/len(scored)
+				print(score*100)
 
 
 
-	print(Xbig.shape)
+		print(Xbig.shape)
 	
 		
 
