@@ -18,6 +18,9 @@ insert3="INSERT INTO {0} (time_stamp, audio) VALUES ({1},{2})	;"
 create4= """CREATE TABLE {0} (start_timestamp INT, end_timestamp INT) ; """
 insert4="INSERT INTO {0} (start_timestamp,end_timestamp	) VALUES ({1},{2})	;"
 
+create5= """CREATE TABLE {0} (time_stamp INT, latitude FLOAT, longitude FLOAT, travelstate INT) ; """
+insert5="INSERT INTO {0} (time_stamp,latitude,longitude,travelstate	) VALUES ({1},{2},{3},{4})	;"
+
 # IMPROTANT NOTE
 # MAC addresses are stored in their oct() form as strings
 usersadded=['u00','u24','u08','u57','u52','u51','u36','u59','u19','u46','u16','u44','u02']
@@ -85,9 +88,23 @@ def dbInsertCharge(csvfile,cur,tableName):
 				insertQ = insert4.format(uid,record['start'], record['end'])
 				cur.execute(insertQ)
 
+def dbInsertGPS(csvfile,cur,tableName):
+	uid=(csvfile.split('_'))[1][0:3] +tableName
+	print(uid)
+	cur.execute(create5.format(uid))
+	#print(create5.format(uid))
+	with open(csvfile,'rb') as inCsv:
+			parsed = csv.DictReader(inCsv , delimiter = ',' , quotechar='"')
+			for record in parsed:
+				if record['travelstate']=='stationary':
+					mov=0
+				else:
+					mov=1
+				insertQ = insert5.format(uid,record['time'], record['latitude'],record['longitude'],mov)
+				cur.execute(insertQ)
+
 
 def main(argv):
-
 	#connecting to database
 	try:
 		con = psycopg2.connect(database='dataset', user='tabrianos')
@@ -101,8 +118,6 @@ def main(argv):
 
 	# if user choses '-insert' then bluetooth and conversation data will be loaded
 	if sys.argv[1]=='-insert':
-		
-
 
 		#setting directory to load app_usage information
 		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/sensing/bluetooth'
@@ -155,7 +170,16 @@ def main(argv):
 
 			dbInsertCharge(filename,cur,tableName)
 
+	elif sys.argv[1]=='-gps':
+		#setting directory to load app_usage information
+		directory = os.path.dirname(os.path.abspath(__file__)) + '/dataset/sensing/gps'
+		tableName = 'gpsdata'
+		#inserting all files to database from given directory
+		print(os.listdir(directory))
+		for filename in os.listdir(directory):
+			filename = directory +'/'+ filename
 
+			dbInsertGPS(filename,cur,tableName)
 
 
 	elif sys.argv[1]=='-drop':
