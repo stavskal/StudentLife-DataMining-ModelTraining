@@ -22,6 +22,8 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u56','u57','u58']
 
 uids1=['u59','u57','u02','u52','u16','u19','u44','u24','u51','u00','u08']
+uids2=['u59','u57','u02','u52','u16','u19','u44','u24','u51','u00','u08']
+
 
 ch = [120,100,70,50,35]
 
@@ -55,17 +57,16 @@ def main():
 		totalP=0
 		totalR=0
 		maxminAcc =[]
-		Xbig = np.zeros([1,21])	
+		Xbig = np.zeros([1,22])	
 		Ybig = np.ones([1])
 		# loso means leave one student out: forest is trained on other users data
 		# then tests are run on 'loso' student 
-		uids1.remove(loso)
-		uids1.append(loso)
+		uids2.remove(loso)
+		uids2.append(loso)
 		print('LOSO: {0}'.format(loso))
-		for testUser in uids1:
+		for testUser in uids2:
 
 			# lists that temporary store features before concatenation
-			Xlist = []
 			ScreenList = []
 			colocationList =[]
 			conversationList =[]
@@ -88,7 +89,7 @@ def main():
 			for i in range(0,len(records)):
 				colocationList.append( colocationStats(cur,testUser,X[i][0]))
 				conversationList.append( convEpochFeats(cur,testUser,X[i][0]))
-				activityList.append(activityFeats(cur,testUser,X[i][0]))
+				activityList.append(activityEpochFeats(cur,testUser,X[i][0]))
 				ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day) )
 
 				if testUser==loso:
@@ -100,7 +101,7 @@ def main():
 
 			#concatenating features in one array 
 			Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
-			print(Xtt.shape)
+			#print(Xtt.shape)
 
 			#initiating and training forest, n_jobs indicates threads, -1 means all available
 			# while the test student is not reached, training data are merged into one big matrix
