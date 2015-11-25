@@ -43,6 +43,7 @@ def unixTimeConv(timestamps):
 		splitTimes[i,:] = (year,month,day,hour,minutes,sec,time)
 		i += 1
 	return(splitTimes)
+
 #----------------------------------------------------------------------------------------
 # converts timestamp to epoch (day,evening,night) pretty straightforward right?
 def epochCalc(timestamps):
@@ -89,9 +90,6 @@ def countAppOccur(cur,uid,timeQuery,timeW):
 
 	return records
 
-
-
-		
 
 
 #---------------------------------------------------------------------------------------
@@ -266,37 +264,45 @@ def colocationStats(cur,uid,timestamp):
 	meanCo = preprocessing.scale( np.nan_to_num(meanCo) )
 	return(meanCo)
 
+def colocationEpochFeats(cur,uid,timestamp):
+	"""Calculates total and average number of people around user at three epochs, 6 features total
+	"""
+	j=0
+	colocFeats = np.zeros(6)
+	cur.execute("SELECT time_stamp,mac FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2}".format(uid+'bt',timestamp-2*halfday,timestamp))
+	records = cur.fetchall() 
+
+	times =[item[0] for item in records]
+	timeEpochs = epochCalc(times)
+
+	#for every epoch count the total number of people around
+	for ep in ['day','evening','night']:
+		timesE = [item[1] for item in timeEpochs if item[0]==ep ]
+		
+		if len(set(timesE)) >0:
+			uniqueTimes = list(set(timesE))
+
+			for t in uniqueTimes:
+				colocFeats[j] += timesE.count(t)
+
+			colocFeats[j+1] = float(colocFeats[j])/ len(set(timesE))
+
+		#step is +2 because 2 features are calculated for every epoch, total number and average
+		j += 2 
+	return(colocFeats)
 
 
-def conversationStats(cur,uid,timestamp):
-	totalConvTime=np.zeros(2)
-	totalConvs = np.zeros(2)
-	totalFeats = np.empty(10)
-	for i in [0,1]:
-		cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-(i+1)*halfday,timestamp))
-		records = cur.fetchall() 
-		timeCon = np.empty(len(records))
 
-		totalConvs[i] = len(records)
-		for j in range(0,len(records)):
-			timeCon[j] = records[j][1]-records[j][0]
 
-		#this is the TRUE power of python
-		totalConvTime[i] = sum([item[1]-item[0] for item in records])
-	
-	# Concatenate 4 features in one nparray before returning
-	# Also zero mean, std 1 and remove nans
-	feats=np.concatenate((totalConvs,totalConvTime),axis=0)
-	feats=np.nan_to_num(feats)
-	feats = preprocessing.scale(feats)
 
-	return(feats)
+
+
 
 
 
 def convEpochFeats(cur,uid,timestamp):
 	"""Returns total duration and number of conversations
-	   calculated in three epochs (day,evening,night)"""
+	   calculated in three epochs (day,evening,night), 6 features total"""
 
 	cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-day,timestamp))
 	records = cur.fetchall()
@@ -335,26 +341,8 @@ def convEpochFeats(cur,uid,timestamp):
 
 
 
-
-def activityFeats(cur,uid,timestamp):
-	totalDur = 0
-	statToMovingRatio = np.zeros(2)
-	uidS = uid +'act'
-	for i in [0,1]:
-		cur.execute('SELECT activity FROM {0} WHERE time_stamp >= {1} AND time_stamp<= {2}'.format(uidS,timestamp-(i+1)*halfday,timestamp))
-		records = cur.fetchall()
-		uniqueActivities = Counter(records)
-
-		#transforming keys cause of ugly return shape of Counter class
-		for k in uniqueActivities.keys():
-			uniqueActivities[k[0]] = uniqueActivities.pop(k)
-
-		statToMovingRatio[i] = uniqueActivities[0]/(uniqueActivities[1]+uniqueActivities[2]+1)
-	return(statToMovingRatio)
-
-
 def activityEpochFeats(cur,uid,timestamp):
-	"""Returns stationary to moving ratio in three epochs 
+	"""Returns stationary to moving ratio in three epochs, 3 features total
 	"""
 	totalDur = 0
 	statToMovingRatio = np.zeros(3)
@@ -403,9 +391,11 @@ con = psycopg2.connect(database='dataset', user='tabrianos')
 cur = con.cursor()
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
-t = 1366400395
+t = 1366499395
+t1= 1365111111
+print(colocationEpochFeats(cur,'u00',t1))
 #print(convEpochFeats(cur,'u00',t))
-print(activityEpochFeats(cur,'u00',t))
+#print(activityEpochFeats(cur,'u00',t))
 #print(conversationStats(cur,'u00',t))
 
 
