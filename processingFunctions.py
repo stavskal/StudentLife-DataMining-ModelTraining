@@ -237,32 +237,7 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 	return(A)
 
 
-def colocationStats(cur,uid,timestamp):
-	""" Computes average number people(BT scans) for two periods in a day(first half and second half of day)
-	    Stats computed are always proceeding stress reports
-	"""
-	meanCo = np.zeros(2)
-	for i in [0,1]:
-		total = 0
 
-		cur.execute("SELECT time_stamp,mac FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2}".format(uid+'bt',timestamp-(i+1)*halfday,timestamp))
-		records = cur.fetchall() 
-
-		#By counting how many times each timestamp appeared, we get the number of nearby people
-		times =[item[0] for item in records]
-
-		if len(set(times)) >0:
-			uniqueTimes = list(set(times))
-
-			for t in uniqueTimes:
-				total += times.count(t)
-
-			meanCo[i] = float(total)
-		else:
-			meanCo[i]= 0
-
-	meanCo = preprocessing.scale( np.nan_to_num(meanCo) )
-	return(meanCo)
 
 def colocationEpochFeats(cur,uid,timestamp):
 	"""Calculates total and average number of people around user at three epochs, 6 features total
@@ -387,13 +362,13 @@ def activityEpochFeats(cur,uid,timestamp):
 	return(statToMovingRatio)
 
 #testing
-con = psycopg2.connect(database='dataset', user='tabrianos')
-cur = con.cursor()
+#con = psycopg2.connect(database='dataset', user='tabrianos')
+#cur = con.cursor()
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
-t = 1366499395
-t1= 1365111111
-print(colocationEpochFeats(cur,'u00',t1))
+#t = 1366499395
+#t1= 1365111111
+#print(colocationEpochFeats(cur,'u00',t1))
 #print(convEpochFeats(cur,'u00',t))
 #print(activityEpochFeats(cur,'u00',t))
 #print(conversationStats(cur,'u00',t))
