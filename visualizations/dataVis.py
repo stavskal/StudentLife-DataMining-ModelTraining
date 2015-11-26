@@ -5,13 +5,39 @@ import psycopg2,random
 import datetime as dt
 from unbalanced_dataset import UnderSampler
 
-from processingFunctions import *
+#from processingFunctions import *
 
 sns.set_style('darkgrid')
 sns.set(color_codes=True)
 #heat = np.array([[62.06,63.34, 60.70,60.8 ,54],[60.44,61.14, 55.38, 63.99, 60.05],[67.1,60.6, 60.54,57.52,58.14]])
 #print(heat.shape)
+uids=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49','Mean']
 
+#user specific    
+x = np.array([67.33,75.79,65.6,79.3,83.5,93.27,43.8,74.64,51.4,66,58.57,56.68,55.97,70.5,60.8,54.4])
+x = np.append(x,x.mean())
+#LOSO
+y = np.array([58.87,78.02,47.12,61.53,78.88,86.36,57.62,68.65,45.94,76.6,58.53,59.43,50,34,55.84,34.4])
+y = np.append(y,y.mean())
+print(x.shape,y.shape,x.mean(),y.mean())
+pyp.scatter(x,y, marker='o')
+pyp.xlabel('User-Specific Model Accuracy')
+pyp.ylabel('Group Model Accuracy (LOSO)')
+pyp.title('Comparison of Personalized and Generic Models')
+
+for label, xi, yi in zip(uids,x,y):
+	if label!='Mean':
+		fc='yellow'
+	else:
+		fc='red'
+	pyp.annotate(
+		label,
+		xy=(xi,yi), xytext=(0,15),
+		textcoords = 'offset points', ha = 'right', va = 'bottom',
+        bbox = dict(boxstyle = 'round,pad=0.3', fc = fc, alpha = 0.5),
+        arrowprops = dict(arrowstyle = '->', connectionstyle = 'arc3,rad=0'))
+
+pyp.savefig('losoUser.png')
 """
 ax1 = sns.heatmap(heat, vmin=50, vmax=65)
 
@@ -56,7 +82,7 @@ ax = sns.tsplot(data=y)
 fig = ax.get_figure()
 fig.savefig('coolplot.png')
 
-"""
+
 
 
 uids1=['u00','u24','u36','u19']
@@ -79,3 +105,5 @@ pyp.savefig('tttt123.png')
 ax = sns.distplot(labels, kde=False)
 fig = ax.get_figure()	
 fig.savefig('ttttt.png')
+
+"""
