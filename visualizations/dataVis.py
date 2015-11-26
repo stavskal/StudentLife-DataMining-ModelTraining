@@ -16,11 +16,21 @@ uids=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u
 #user specific    
 x = np.array([67.33,75.79,65.6,79.3,83.5,93.27,43.8,74.64,51.4,66,58.57,56.68,55.97,70.5,60.8,54.4])
 x = np.append(x,x.mean())
+
+
 #LOSO
 y = np.array([58.87,78.02,47.12,61.53,78.88,86.36,57.62,68.65,45.94,76.6,58.53,59.43,50,34,55.84,34.4])
 y = np.append(y,y.mean())
 print(x.shape,y.shape,x.mean(),y.mean())
+listaa=[x.min(),y.min(),x.max(),x.max()]
+
+mini = min(listaa)
+maxi = max(listaa)
+print(listaa)
 pyp.scatter(x,y, marker='o')
+pyp.xlim(mini-4,maxi+6.7)
+pyp.ylim(mini-4,maxi+6.7)
+pyp.gca().set_aspect('equal', adjustable='box')
 pyp.xlabel('User-Specific Model Accuracy')
 pyp.ylabel('Group Model Accuracy (LOSO)')
 pyp.title('Comparison of Personalized and Generic Models')
@@ -37,7 +47,7 @@ for label, xi, yi in zip(uids,x,y):
         bbox = dict(boxstyle = 'round,pad=0.3', fc = fc, alpha = 0.5),
         arrowprops = dict(arrowstyle = '->', connectionstyle = 'arc3,rad=0'))
 
-pyp.savefig('losoUser.png')
+pyp.savefig('losoUser1.png')
 """
 ax1 = sns.heatmap(heat, vmin=50, vmax=65)
 
