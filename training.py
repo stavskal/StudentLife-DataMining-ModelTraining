@@ -21,7 +21,6 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u56','u57','u58','u59']
 
 #uids1=['u00','u12','u19','u46','u59','u52','u57','u59','u08']
-uids1=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49']
 
 ch = [120,100,70,50,35]
 
@@ -124,7 +123,8 @@ def main(argv):
 			score = 0
 			scoreT = 0
 			folds=2
-			# Ensuring label percentage balance when K-folding
+
+			# Ensuring label percentage balance with Stratified K-folding
 			skf = StratifiedKFold(Y, n_folds=folds)
 			for train_index,test_index in skf:
 				Xtrain,Xtest = Xtt[train_index], Xtt[test_index]
@@ -180,21 +180,31 @@ def main(argv):
 		#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
 
 	elif sys.argv[1]=='-train':
-	
+		RF =[]
+
 		X=np.load('numdata/epochFeats.npy')
-		Y=np.load('numdata/epochLabels.npy')
+		Y=np.transpose(np.array([np.load('numdata/epochLabels.npy')]))
 		labels= np.transpose(np.array([np.load('numdata/LOO.npy')]))
-		
+		print(X.shape,Y.shape,labels.shape)
 		# concatenating user labels to distinguish which rows correspond to which user
-		alltogether = np.concatenate((X,labels),axis=1)
+		alltogether = np.concatenate((X,Y,labels),axis=1)
+		print(alltogether.shape)
 		for testUser in uids1:
-			# separating user-specific data
-			trainMat = np.array([item[:] for item in alltogether if item[26]==testUser[-2:]])
-			# splitting again to keep only feature dataset
-			trainMat = trainMat[:,0:trainMat.shape[1]-1]
+			# separating user-specific data----------------------if u(XX) in Labels keep it
+			trainMat = np.array([item[:] for item in alltogether if item[-1]==testUser[-2:]])
 			
+			# splitting again to keep only feature dataset, user labels not needed any more
+			trainMat = trainMat[: , 0:trainMat.shape[1]-1]
 
-
+			# separating features into categories for Ensemble Training
+			activityData = trainMat[:,0:6 ]
+			screenData = trainMat[:,6:17]
+			conversationData = trainMat[:,17:23 ]
+			colocationData = trainMat[:,23:trainMat.shape[1]-1]
+			Y = trainMat[:,trainMat.shape[1]-1:trainMat.shape[1]]
+			print(activityData.shape, screenData.shape, conversationData.shape, colocationData.shape, Y.shape	)
+			
+			
 
 if __name__ == '__main__':
 	main(sys.argv[1:])
