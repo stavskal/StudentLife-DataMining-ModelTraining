@@ -50,7 +50,7 @@ def appStatsL(cur,uid,timestamp,timeWin):
 
 
 
-def main():
+def main(argv):
 #testing
 	con = psycopg2.connect(database='dataset', user='tabrianos')
 	cur = con.cursor()
@@ -72,115 +72,129 @@ def main():
 	totalP=0
 	totalR=0
 	maxminAcc =[]	
-	
-	for testUser in uids1:
-		Xlist = []
-		activityList = []
-		ScreenList = []
-		colocationList =[]
-		conversationList =[]
-		#cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
-		#records = cur.fetchall()
+	if sys.argv[1]=='-load':
+		for testUser in uids1:
+			Xlist = []
+			activityList = []
+			ScreenList = []
+			colocationList =[]
+			conversationList =[]
+			#cur.execute("SELECT time_stamp,stress_level FROM {0}".format(testUser))
+			#records = cur.fetchall()
 
-		records = loadStressLabels(cur,testUser)
+			records = loadStressLabels(cur,testUser)
 
-		#meanTime = meanStress(cur,testUser)
- 
-	
-
-		
-		#X,Y store initially the dataset and the labels accordingly
-		Y = np.zeros(len(records))
-		X = np.array(records)
-
-		# X is shuffled twice to ensure that the report sequence is close to random
-		#np.random.shuffle(X)
-		#np.random.shuffle(X)
-
-		# Xlist contains Feature Vectors for Applications of different lengths according to each period
-		# ScreenList contains FVs regarding screen info, fixed length (=7) for same periods
-		t0 = time.time()
-		for i in range(0,len(records)):
-			colocationList.append( colocationEpochFeats(cur,testUser,X[i][0]))
-			conversationList.append( convEpochFeats(cur,testUser,X[i][0]))
-			activityList.append( activityEpochFeats(cur,testUser,X[i][0]))
-			ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day))
-			Y[i] = X[i][1]
-
-		
-		t1 = time.time()
-
-
-		Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
-		#print(Xtt[1,:])
-
-		#print(Xtt)
-
+			#meanTime = meanStress(cur,testUser)
+	 
 		
 
-		#initiating and training forest, n_jobs indicates threads, -1 means all available
-		forest = RandomForestClassifier(n_estimators=100,n_jobs = -1)
-		exTrees = ExtraTreesClassifier(n_estimators=500 ,n_jobs = -1)
-		score = 0
-		scoreT = 0
-		folds=2
-		# Ensuring label percentage balance when K-folding
-		skf = StratifiedKFold(Y, n_folds=folds)
-		for train_index,test_index in skf:
-			Xtrain,Xtest = Xtt[train_index], Xtt[test_index]
-			ytrain,ytest = Y[train_index], Y[test_index]
 			
-			Xtrain = np.array(Xtrain,dtype='float64')
-			Xtest = np.array(Xtest,dtype='float64')
+			#X,Y store initially the dataset and the labels accordingly
+			Y = np.zeros(len(records))
+			X = np.array(records)
 
-			forest = forest.fit(Xtrain,ytrain)
-			exTrees = exTrees.fit(Xtrain,ytrain) 
+			# X is shuffled twice to ensure that the report sequence is close to random
+			#np.random.shuffle(X)
+			#np.random.shuffle(X)
 
-			output = np.array(forest.predict(Xtest))
-			outputT = np.array(exTrees.predict(Xtest))
+			# Xlist contains Feature Vectors for Applications of different lengths according to each period
+			# ScreenList contains FVs regarding screen info, fixed length (=7) for same periods
+			t0 = time.time()
+			for i in range(0,len(records)):
+				colocationList.append( colocationEpochFeats(cur,testUser,X[i][0]))
+				conversationList.append( convEpochFeats(cur,testUser,X[i][0]))
+				activityList.append( activityEpochFeats(cur,testUser,X[i][0]))
+				ScreenList.append( screenStatFeatures(cur,testUser,X[i][0],day))
+				Y[i] = X[i][1]
+
 			
-			scored = output - np.array(ytest)
-			scoredT = outputT - np.array(ytest)
-			#Counting as correct predictions the ones which fall in +/-1
-			correct=0
-			c = Counter(scored)
-			for k in c.keys():
-				if k<2 and k>-2:
-					correct += c[k]
+			t1 = time.time()
+
+			print(np.array(activityList).shape,np.array(ScreenList).shape,np.array(conversationList).shape,np.array(colocationList).shape)
+			Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
+			#print(Xtt[1,:])
+
+			#print(Xtt)
+
 			
-			score += float(correct)/len(scored)
 
-			correct=0
-			c = Counter(scoredT)
-			for k in c.keys():
-				if k<2 and k>-2:
-					correct += c[k]
+			#initiating and training forest, n_jobs indicates threads, -1 means all available
+			forest = RandomForestClassifier(n_estimators=100,n_jobs = -1)
+			exTrees = ExtraTreesClassifier(n_estimators=500 ,n_jobs = -1)
+			score = 0
+			scoreT = 0
+			folds=2
+			# Ensuring label percentage balance when K-folding
+			skf = StratifiedKFold(Y, n_folds=folds)
+			for train_index,test_index in skf:
+				Xtrain,Xtest = Xtt[train_index], Xtt[test_index]
+				ytrain,ytest = Y[train_index], Y[test_index]
+				
+				Xtrain = np.array(Xtrain,dtype='float64')
+				Xtest = np.array(Xtest,dtype='float64')
 
-			scoreT += float(correct)/len(scoredT)
+				forest = forest.fit(Xtrain,ytrain)
+				exTrees = exTrees.fit(Xtrain,ytrain) 
+
+				output = np.array(forest.predict(Xtest))
+				outputT = np.array(exTrees.predict(Xtest))
+				
+				scored = output - np.array(ytest)
+				scoredT = outputT - np.array(ytest)
+				#Counting as correct predictions the ones which fall in +/-1
+				correct=0
+				c = Counter(scored)
+				for k in c.keys():
+					if k<2 and k>-2:
+						correct += c[k]
+				
+				score += float(correct)/len(scored)
+
+				correct=0
+				c = Counter(scoredT)
+				for k in c.keys():
+					if k<2 and k>-2:
+						correct += c[k]
+
+				scoreT += float(correct)/len(scoredT)
 
 
 
 
-		#output = forest.predict(Xtest)
-	
-		#Averaging accuracy over folds
-		print('Accuracy RF,ExtraTrees: {0} %  , {1} %    User: {2}'.format(score*100/folds,scoreT*100/folds,testUser))
-
+			#output = forest.predict(Xtest)
 		
-		acc += score*100/folds
-		accT += scoreT*100/folds
-		maxminAcc.append(score*100/folds)
-		del Xlist[:]
-		del ScreenList[:]
-		#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))
-	print('Average accuracy RF, ExtraTrees: {0} %  , {1} %'.format(float(acc)/len(uids1),float(accT)/len(uids1)))
-	print('Max / Min accuracy: {0}%  / {1}% '.format(max(maxminAcc), min(maxminAcc)))
-	print()
-	#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
-	#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
+			#Averaging accuracy over folds
+			print('Accuracy RF,ExtraTrees: {0} %  , {1} %    User: {2}'.format(score*100/folds,scoreT*100/folds,testUser))
 
+			
+			acc += score*100/folds
+			accT += scoreT*100/folds
+			maxminAcc.append(score*100/folds)
+			del Xlist[:]
+			del ScreenList[:]
+			#print('User: {0}  Accuracy: {1}'.format(testUser,tempAcc))
+		print('Average accuracy RF, ExtraTrees: {0} %  , {1} %'.format(float(acc)/len(uids1),float(accT)/len(uids1)))
+		print('Max / Min accuracy: {0}%  / {1}% '.format(max(maxminAcc), min(maxminAcc)))
+		print()
+		#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
+		#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
+
+	elif sys.argv[1]=='-train':
+	
+		X=np.load('numdata/epochFeats.npy')
+		Y=np.load('numdata/epochLabels.npy')
+		labels= np.transpose(np.array([np.load('numdata/LOO.npy')]))
+		
+		# concatenating user labels to distinguish which rows correspond to which user
+		alltogether = np.concatenate((X,labels),axis=1)
+		for testUser in uids1:
+			# separating user-specific data
+			trainMat = np.array([item[:] for item in alltogether if item[26]==testUser[-2:]])
+			# splitting again to keep only feature dataset
+			trainMat = trainMat[:,0:trainMat.shape[1]-1]
+			
 
 
 
 if __name__ == '__main__':
-	main()
+	main(sys.argv[1:])
