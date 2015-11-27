@@ -2,12 +2,15 @@ import json,csv,sys,os,psycopg2,random
 import numpy as np
 from collections import Counter 
 from processingFunctions import *
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier,RandomForestRegressor
 from sklearn.metrics import precision_score, recall_score, confusion_matrix
 from sklearn.cross_validation import cross_val_score, StratifiedKFold
 import matplotlib.pyplot as plt
 import time
-
+from nolearn.lasagne import NeuralNet, TrainSplit
+from nolearn.lasagne.visualize import plot_loss
+from lasagne.layers import InputLayer
+from lasagne.layers import DenseLayer
 
 
 day = 86400
@@ -109,7 +112,7 @@ def main(argv):
 			
 			t1 = time.time()
 
-			print(np.array(activityList).shape,np.array(ScreenList).shape,np.array(conversationList).shape,np.array(colocationList).shape)
+			#print(np.array(activityList).shape,np.array(ScreenList).shape,np.array(conversationList).shape,np.array(colocationList).shape)
 			Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList)),axis=1)
 			#print(Xtt[1,:])
 
@@ -179,32 +182,15 @@ def main(argv):
 		#print('Average precision: {0} %'.format(float(totalP)*100/len(uids1)))
 		#print('Average recall: {0} %'.format(float(totalR)*100/len(uids1)))
 
+
+
+
+
 	elif sys.argv[1]=='-train':
-		RF =[]
+		#do stuff
+		print('yolo')
+			
 
-		X=np.load('numdata/epochFeats.npy')
-		Y=np.transpose(np.array([np.load('numdata/epochLabels.npy')]))
-		labels= np.transpose(np.array([np.load('numdata/LOO.npy')]))
-		print(X.shape,Y.shape,labels.shape)
-		# concatenating user labels to distinguish which rows correspond to which user
-		alltogether = np.concatenate((X,Y,labels),axis=1)
-		print(alltogether.shape)
-		for testUser in uids1:
-			# separating user-specific data----------------------if u(XX) in Labels keep it
-			trainMat = np.array([item[:] for item in alltogether if item[-1]==testUser[-2:]])
-			
-			# splitting again to keep only feature dataset, user labels not needed any more
-			trainMat = trainMat[: , 0:trainMat.shape[1]-1]
-
-			# separating features into categories for Ensemble Training
-			activityData = trainMat[:,0:6 ]
-			screenData = trainMat[:,6:17]
-			conversationData = trainMat[:,17:23 ]
-			colocationData = trainMat[:,23:trainMat.shape[1]-1]
-			Y = trainMat[:,trainMat.shape[1]-1:trainMat.shape[1]]
-			print(activityData.shape, screenData.shape, conversationData.shape, colocationData.shape, Y.shape	)
-			
-			
 
 if __name__ == '__main__':
 	main(sys.argv[1:])
