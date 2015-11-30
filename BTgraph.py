@@ -23,10 +23,10 @@ insert5="INSERT INTO {0} (time_stamp,latitude,longitude,travelstate	) VALUES ({1
 
 # IMPROTANT NOTE
 # MAC addresses are stored in their oct() form as strings
-usersadded=['u00','u24','u08','u57','u52','u51','u36','u59','u19','u46','u16','u44','u02']
+usersadded=['u00','u24','u08','u57','u52','u51','u36','u59','u19','u46','u16','u44','u02','u49','u10','u32','u33','u43']
 
 files =['audio_u00.csv','audio_u24.csv','audio_u08.csv','audio_u57.csv','audio_u52.csv','audio_u51.csv','audio_u36.csv','audio_u59.csv']
-files1 =['audio_u16.csv','audio_u44.csv','audio_u02.csv']
+files1 =['audio_u19.csv']
 
 
 # Parses data from CSV files to insert bluetooth scans in database tables
