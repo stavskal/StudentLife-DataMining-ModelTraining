@@ -17,26 +17,36 @@ from nolearn.lasagne import NeuralNet, TrainSplit
 from nolearn.lasagne.visualize import plot_loss
 from lasagne.layers import InputLayer
 from lasagne.layers import DenseLayer
+from lasagne.nonlinearities import softmax,sigmoid,tanh,rectify
+
+def visualizeError(net):
+	train_loss = np.array([i["train_loss"] for i in net.train_history_])
+	valid_loss = np.array([i["valid_loss"] for i in net.train_history_])
+	plt.plot(train_loss, linewidth=3, label="train")
+	plt.plot(valid_loss, linewidth=3, label="valid")
+	plt.grid()
+	plt.legend()
+	plt.title('Learning Curve for Neural Network')
+	plt.xlabel("epoch")
+	plt.ylabel("loss")
+#pyplot.ylim(1e-3, 1e-2)
+	#plt.yscale("log")
+	plt.savefig('trainvalloss.png')
 
 
 def tolAcc(y,pred):
 	"""Returns accuracy as defined by the Tolerance Method
-	   Input: ground truth, predition
+	   Input: ground truth, prediction
 	"""
-	for i in range(0,len(y)):
-		print(y[i],pred[i])
-	output = np.array(pred)
-	scored = output - np.array(y)
-
-	# Counting as correct predictions the ones which fall in +/-1, not only exact
-	# I call it the 'Tolerance technique'
 	correct=0
-	c = Counter(scored)
-	for k in c.keys():
-		if k<1.5 and k>-1.5:
-			correct += c[k]
-	
-	score = float(correct)/len(scored)
+	errors=[]
+	for i in range(0,len(y)):
+		errors.append(np.absolute(y[i]-pred[i]))
+		if errors[i]<1:
+			correct+=1
+	score = float(correct)/len(y)
+	meanEr = sum(errors)/len(errors)
+	print('Mean error: {0}'.format(meanEr))
 	return(score*100)
 
 def fiPlot(rf):
@@ -95,95 +105,73 @@ def main(argv):
 	elif sys.argv[1]=='-ensemble':
 		RF  = []
 		outputRF = []
+		outRFtest=[]
 		folds = 2
+		Y = np.load('numdata/epochLabels.npy')
+		#us = UnderSampler(verbose=True)
+		#X,Y = us.fit_transform(X,Y)
 		print(X.shape,Y.shape,labels.shape)
-		# concatenating user labels to distinguish which rows correspond to which user
-		alltogether = np.concatenate((X,Y,labels),axis=1)
-		print(alltogether.shape)
-		for testUser in uids1:
-			# separating user-specific data----------------------if u(XX) in Labels keep it
-			trainMat = np.array([item[:] for item in alltogether if item[-1]==testUser[-2:]])
-			
-			# splitting again to keep only feature dataset, user labels not needed any more
-			trainMat = trainMat[: , 0:trainMat.shape[1]-1]
+	
 
-			# separating features into categories for Ensemble Training
-			activityData = trainMat[:,0:3 ]
-			screenData = trainMat[:,3:14]
-			conversationData = trainMat[:,14:20 ]
-			colocationData = trainMat[:,20:trainMat.shape[1]-1]
+		# separating features into categories for Ensemble Training
+		activityData = X[:,0:3 ]
+		screenData = X[:,3:14]
+		conversationData = X[:,14:20 ]
+		colocationData = X[:,20:X.shape[1]]
 
-			#spaghetti patching
-			Y = trainMat[:,trainMat.shape[1]-1:trainMat.shape[1]]
-			Y = np.array(([item[0] for item in Y]),dtype='float32')
-			#print(np.array(Y))
-			#print(np.array(Y).shape)
+		# Indexes is used to split the dataset in a 40/40/20 manner
+		indexes = np.array([i for i in range(X.shape[0])])
+		np.random.shuffle(indexes)
 
-			kf = KFold(Y.shape[0], n_folds=2,shuffle=True)
-			print('Here we go kfold')
-			for train_index,test_index in kf:
-				print(train_index.shape)
-				Xtrain,Xtest = X[train_index], X[test_index]
-				ytrain,ytest = Y[train_index], Y[test_index]
+		# separating data to 3 subsets: 
+		# 1) Train RF
+		# 2) Get RF outputs with which NN is trained
+		# 3) Test NN output
+		train_index = indexes[0: int(0.4*X.shape[0])]
+		train_index2 =  indexes[int(0.4*X.shape[0]):int(0.8*X.shape[0])]
+		test_index = indexes[int(0.8*X.shape[0]):X.shape[0]]
 
-				#Training 4 regressors
-				i=0
-				for data in [activityData,screenData,conversationData,colocationData]:
-					RF.append(RandomForestRegressor(n_estimators=300,max_features=None,n_jobs=-1))
-					RF[i].fit(data[train_index],Y[train_index])
-					outputRF.append( RF[i].predict(data[test_index]) )
-					print(len(outputRF[i]))
-					i += 1
-				middleTrainMat = np.transpose(np.array(outputRF))
-				#middleTrainMat = np.concatenate((np.array(outputRF[0]),np.array(outputRF[1]),np.array(outputRF[2]),np.array(outputRF[3])),axis=1)
-				#print(middleTrainMat.shape)
-				#print(Y[test_index].shape)
-				layers_all = [('input',InputLayer),
-							  ('dense',DenseLayer),
-							  ('output',DenseLayer)]
+		#Training 4 regressors
+		i=0
+		for data in [activityData,screenData,conversationData,colocationData]:
+			RF.append(RandomForestRegressor(n_estimators=300,max_features=None,n_jobs=-1))
+			RF[i].fit(data[train_index],Y[train_index])
+			outputRF.append( RF[i].predict(data[train_index2]) )
+			outRFtest.append(RF[i].predict(data[test_index]))
+			i += 1
 
-				net = NeuralNet(layers = layers_all,
+		middleTrainMat = np.transpose(np.array(outputRF))
+		testMat = np.transpose(np.array(outRFtest))
+	
+		layers_all = [('input',InputLayer),
+					  ('dense',DenseLayer),
+					  ('output',DenseLayer)]
+
+
+		# Just a linear combination of the inputs is enough
+		net = NeuralNet(layers = layers_all,
 	 					 input_shape = (None,4),
-						 dense_num_units=6,
+						 dense_num_units=7,
 						 dense_nonlinearity=None,
 						 regression=True,
 						 update_momentum=0.9,
 						 update_learning_rate=0.001,
 		 				 output_nonlinearity=None,
 	 					 output_num_units=1,
-	 					 max_epochs=100)
-				print(middleTrainMat.shape, Y[test_index].shape)
-				net.fit(middleTrainMat,Y[test_index])
+	 					 max_epochs=60, # 60 epochs is enough, usually converges around 30-40
+	 					 verbose=True)
 
-				pred = net.predict()
-				#del middleTrainMat
-				del outputRF[:]
-				del net
-				
+		net.fit(middleTrainMat,Y[train_index2])
 
+		# save figure of learning curve
+		visualizeError(net)
 
-
-
-				print(activityData.shape, screenData.shape, conversationData.shape, colocationData.shape, Y.shape	)
+		pred = net.predict(testMat)
+		# Print to screen mean error and Tolerance Score
+		print(tolAcc(Y[test_index],pred))
+		
 
 
-	
-
-"""
-#	pipe = Pipeline(steps=[('scaler',scaler),('pca',pca) ,('forest',forest)])
-	bestNComp=[]
-	for comp in range(2,25):	
-		pca= PCA(n_components=comp)
-		pipe = Pipeline(steps=[('scaler',scaler),('pca',pca) ,('forest',forest)])
-
-		score = cross_val_score(pipe,X,Y,cv=kf)
-		bestNComp.append((score.mean(),comp))
-	maxC= max([item[1] for item in bestNComp ])
-	maxA= max([item[0] for item in bestNComp])
-	print('Optimal number of Principal Components is: {0} with according accuracy of : {1}'.format(maxC,maxA))
-#	X = preprocessing.scale(X)
-
-"""
 
 
 
