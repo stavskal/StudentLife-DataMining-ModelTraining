@@ -13,6 +13,12 @@ import matplotlib.pyplot as plt
 import time
 import warnings
 
+from nolearn.lasagne import NeuralNet, TrainSplit
+from nolearn.lasagne.visualize import plot_loss
+from lasagne.layers import InputLayer
+from lasagne.layers import DenseLayer
+
+
 def tolAcc(y,pred):
 	"""Returns accuracy as defined by the Tolerance Method
 	   Input: ground truth, predition
@@ -54,9 +60,9 @@ def main(argv):
 	labels= np.transpose(np.array([np.load('numdata/LOO.npy')]))
 
 	if sys.argv[1]=='-first':
-		
+		Y = np.load('numdata/epochLabels.npy')
 		print(X.shape, Y.shape, labels.shape)
-		folds=3
+		folds=10
 
 		#Pipeline stuff 
 		forest = RandomForestRegressor(n_estimators=100, n_jobs = -1)
@@ -68,7 +74,7 @@ def main(argv):
 
 		us = UnderSampler(verbose=True)
 		X,Y = us.fit_transform(X,Y)
-		kf = StratifiedKFold(Y,n_folds=folds)
+		kf = KFold(Y.shape[0],n_folds=folds)
 		for train_index,test_index in kf:
 		#	print max(train_index),max(test_index)
 			Xtrain,Xtest = X[train_index], X[test_index]
@@ -81,10 +87,15 @@ def main(argv):
 			acc += tolAcc(ytest,scores)
 			
 		print(acc/folds)
-	
+
+
+
+	# DESPERATE ATTEMPT TO BUILD SOMETHING THAT PREDICTS	
+	# TODO: build the same thing in group model, not enough data for personalized
 	elif sys.argv[1]=='-ensemble':
-		RF =[]
-		
+		RF  = []
+		outputRF = []
+		folds = 2
 		print(X.shape,Y.shape,labels.shape)
 		# concatenating user labels to distinguish which rows correspond to which user
 		alltogether = np.concatenate((X,Y,labels),axis=1)
@@ -97,35 +108,63 @@ def main(argv):
 			trainMat = trainMat[: , 0:trainMat.shape[1]-1]
 
 			# separating features into categories for Ensemble Training
-			activityData = trainMat[:,0:6 ]
-			screenData = trainMat[:,6:17]
-			conversationData = trainMat[:,17:23 ]
-			colocationData = trainMat[:,23:trainMat.shape[1]-1]
+			activityData = trainMat[:,0:3 ]
+			screenData = trainMat[:,3:14]
+			conversationData = trainMat[:,14:20 ]
+			colocationData = trainMat[:,20:trainMat.shape[1]-1]
+
+			#spaghetti patching
 			Y = trainMat[:,trainMat.shape[1]-1:trainMat.shape[1]]
-			i=0
-			#Training 4 regressors
-			for data in [activityData,screenData,conversationData,colocationData]:
-				RF.append(RandomForestRegressor(n_estimators=300,max_features=None,n_jobs=-1))
-				RF[i].fit(data,Y)
-				i += 1
-			
-			layers_all = [('input',InputLayer),
-				   ('dense',DenseLayer),
-				   	('output',DenseLayer)]
+			Y = np.array(([item[0] for item in Y]),dtype='float32')
+			#print(np.array(Y))
+			#print(np.array(Y).shape)
 
-			net = NeuralNet(layers = layers_all,
- 					 input_shape = (None,len(RF)),
-					 dense_num_units=5,
-					 dense_nonlinearity=None,
-					 regression=True,
-					 update_momentum=0.9,
-					 update_learning_rate=0.001,
-	 				 output_nonlinearity=None,
- 					 output_num_units=1,
- 					 max_epochs=100)
+			kf = KFold(Y.shape[0], n_folds=2,shuffle=True)
+			print('Here we go kfold')
+			for train_index,test_index in kf:
+				print(train_index.shape)
+				Xtrain,Xtest = X[train_index], X[test_index]
+				ytrain,ytest = Y[train_index], Y[test_index]
+
+				#Training 4 regressors
+				i=0
+				for data in [activityData,screenData,conversationData,colocationData]:
+					RF.append(RandomForestRegressor(n_estimators=300,max_features=None,n_jobs=-1))
+					RF[i].fit(data[train_index],Y[train_index])
+					outputRF.append( RF[i].predict(data[test_index]) )
+					print(len(outputRF[i]))
+					i += 1
+				middleTrainMat = np.transpose(np.array(outputRF))
+				#middleTrainMat = np.concatenate((np.array(outputRF[0]),np.array(outputRF[1]),np.array(outputRF[2]),np.array(outputRF[3])),axis=1)
+				#print(middleTrainMat.shape)
+				#print(Y[test_index].shape)
+				layers_all = [('input',InputLayer),
+							  ('dense',DenseLayer),
+							  ('output',DenseLayer)]
+
+				net = NeuralNet(layers = layers_all,
+	 					 input_shape = (None,4),
+						 dense_num_units=6,
+						 dense_nonlinearity=None,
+						 regression=True,
+						 update_momentum=0.9,
+						 update_learning_rate=0.001,
+		 				 output_nonlinearity=None,
+	 					 output_num_units=1,
+	 					 max_epochs=100)
+				print(middleTrainMat.shape, Y[test_index].shape)
+				net.fit(middleTrainMat,Y[test_index])
+
+				pred = net.predict()
+				#del middleTrainMat
+				del outputRF[:]
+				del net
+				
 
 
-			print(activityData.shape, screenData.shape, conversationData.shape, colocationData.shape, Y.shape	)
+
+
+				print(activityData.shape, screenData.shape, conversationData.shape, colocationData.shape, Y.shape	)
 
 
 	
@@ -149,4 +188,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-	main()
+	main(sys.argv[1:])
