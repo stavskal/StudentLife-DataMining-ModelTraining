@@ -26,7 +26,8 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u56','u57','u58','u59']
 
 # List of 'good' users
-uids1=['u00','u02','u12','u24','u08','u57','u52','u51','u59']
+#uids1=['u00','u02','u12','u24','u08','u57','u52','u51','u59']
+uids1=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49']
 
 
 #---------------------------------------------------------------------------------------
@@ -271,10 +272,6 @@ def colocationEpochFeats(cur,uid,timestamp):
 
 
 
-
-
-
-
 def convEpochFeats(cur,uid,timestamp):
 	"""Returns total duration and number of conversations
 	   calculated in three epochs (day,evening,night), 6 features total"""
@@ -361,6 +358,61 @@ def activityEpochFeats(cur,uid,timestamp):
 
 	return(statToMovingRatio)
 
+
+
+
+def audioEpochFeats(cuir,uid,timestamp):
+	""" Returns voice to silence ratio and total noise occurences in three epochs
+		one day prior to report
+	"""
+	uidA = uid +'audio'
+	
+	silence = np.zeros(3)
+	noise = np.zeros(3)
+	voice = np.zeros(3)
+
+	voiseToSilenceRatio = np.zeros(3)
+
+	cur.execute('SELECT time_stamp, audio FROM {0} WHERE time_stamp >= {1} AND time_stamp<= {2}'.format(uidA,timestamp-2*halfday,timestamp))
+	records = cur.fetchall()
+
+	tStart = [item[0] for item in records if item[1]!=3]
+	timeEpochs = (epochCalc(tStart))
+
+	#counting occurences of each class in each epoch
+	for i in range(0,len(records)):
+		if timeEpochs[i][0]=='day':
+			if records[i][1]==0:
+				silence[0] += 1
+			elif records[i][1]==1:
+				voice[0] += 1
+			else:
+				noise[0] +=1
+
+
+		if timeEpochs[i][0]=='evening':
+			if records[i][1]==0:
+				silence[1] += 1
+			elif records[i][1]==1:
+				voice[1] += 1
+			else:
+				noise[1] +=1
+
+		if timeEpochs[i][0]=='night':
+			if records[i][1]==0:
+				silence[2] += 1
+			elif records[i][1]==1:
+				voice[2] += 1
+			else:
+				noise[2] +=1
+
+	for i in range(0,3):
+		if silence[i]>0:
+			noiseToSilenceRatio[i] = float(voice[i]) / silence[i]
+
+	return(np.concatenate((voiseToSilenceRatio,noice),axis=0))
+
+
 #testing
 #con = psycopg2.connect(database='dataset', user='tabrianos')
 #cur = con.cursor()
@@ -372,7 +424,7 @@ def activityEpochFeats(cur,uid,timestamp):
 #print(convEpochFeats(cur,'u00',t))
 #print(activityEpochFeats(cur,'u00',t))
 #print(conversationStats(cur,'u00',t))
-
+#print(audioEpochFeats(cur,'u00',t))
 
 #print(colocationStats(cur,'u00',t ))
 #d = countAppOccur(cur,'u59',30,t)
