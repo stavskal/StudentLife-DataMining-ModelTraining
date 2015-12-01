@@ -72,7 +72,7 @@ def main(argv):
 					elif int(fullfile[i]['level'])==3:
 						stress = 4
 
-					insertQ=insert1.format(uid, fullfile[i]['resp_time'], fullfile[i]['level'])
+					insertQ=insert1.format(uid, fullfile[i]['resp_time'], stress)
 					print(insertQ)
 					cur.execute(insertQ)
 		
