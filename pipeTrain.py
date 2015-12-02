@@ -49,7 +49,7 @@ def tolAcc(y,pred,testMat):
 	errors=[]
 	for i in range(0,len(y)):
 		errors.append(np.absolute(y[i]-pred[i]))
-		print('Pred,True: {0},{1} Data: {2}'.format(pred[i],y[i],testMat[i,:]))
+	#	print('Pred,True: {0},{1} Data: {2}'.format(pred[i],y[i],testMat[i,:]))
 		if errors[i]<=1:
 			correct+=1
 		if errors[i]==0:
@@ -57,9 +57,9 @@ def tolAcc(y,pred,testMat):
 	score = float(correct)/len(y)
 	truescore = float(truecorrect)/len(y)
 	meanEr = sum(errors)/len(errors)
-	print('Mean error: {0}'.format(meanEr))
-	print('Min max prediction: {0},{1}'.format(min(pred),max(pred)))
-	return((score*100,truescore*100))
+	#print('Mean error: {0}'.format(meanEr))
+	#print('Min max prediction: {0},{1}'.format(min(pred),max(pred)))
+	return(score*100)
 
 def fiPlot(rf):
 	""" Bar plot of feature importances of RF
@@ -101,6 +101,7 @@ def main(argv):
 		for train_index,test_index in lolo:
 
 			print(len(train_index),len(test_index))
+			print (train_index,test_index)
 			Xtrain,Xtest = X[train_index], X[test_index]
 			ytrain,ytest = Y[train_index], Y[test_index]
 			
@@ -119,6 +120,7 @@ def main(argv):
 		RF  = []
 		outputRF = []
 		outRFtest=[]
+		totalacc=0
 	
 		us = UnderSampler(verbose=True)
 		#cc = ClusterCentroids(verbose=True)
@@ -138,58 +140,49 @@ def main(argv):
 		indexes = np.array([i for i in range(X.shape[0])])
 		np.random.shuffle(indexes)
 
-		# separating data to 3 subsets: 
-		# 1) Train RF
-		# 2) Get RF outputs with which train NN
-		# 3) Test NN output on the rest
-		train_index = indexes[0: int(0.3*X.shape[0])]
-		train_index2 =  indexes[int(0.3*X.shape[0]):int(0.6*X.shape[0])]
-		test_index = indexes[int(0.6*X.shape[0]):X.shape[0]]
-
-		# Training 5 regressors on 5 types of features
-		i=0
-		for data in [activityData,screenData,conversationData,colocationData,audioData]:
-			RF.append(RandomForestRegressor(n_estimators=300,max_features=None,n_jobs=-1))
-			RF[i].fit(data[train_index],Y[train_index])
-			outputRF.append( RF[i].predict(data[train_index2]) )
-			outRFtest.append(RF[i].predict(data[test_index]))
-			i += 1
-
-		middleTrainMat = np.transpose(np.array(outputRF))
-		testMat = np.transpose(np.array(outRFtest))
-	
-		layers_all = [('input',InputLayer),
-					  ('dense',DenseLayer),
-					  ('output',DenseLayer)]
-
-		# Currently not used
-		# Just a linear combination of the inputs is enough
-		net = NeuralNet(layers = layers_all,
-	 					 input_shape = (None,5),
-						 dense_num_units=12,
-						 dense_nonlinearity=None,
-						 regression=True,
-						 update_momentum=0.9,
-						 update_learning_rate=0.001,
-		 				 output_nonlinearity=None,
-	 					 output_num_units=1,
-	 					 max_epochs=60,) # 60 epochs is enough, usually converges around 30-40
+		# I GOT IT FOR THE LOLO (baking soda)
+		lolo = LeaveOneLabelOut(labels)	
+		#print(lolo,len(lolo))
 
 
-		# RF classifier to combine regressors
-		rfr= RandomForestClassifier(n_estimators=300,n_jobs=-1)
-		rfr.fit(middleTrainMat,Y[train_index2])
-		print(middleTrainMat.shape)
-		net.fit(middleTrainMat,Y[train_index2])
-		
-		# save figure of learning curve
-		visualizeError(net)
-		
-		pred = rfr.predict(testMat)
-		# Print to screen mean error and Tolerance Score
-		print(tolAcc(Y[test_index],pred,testMat))
+		for traini, testi in lolo:
+			np.random.shuffle(traini)
+			# separating train data to 2 subsets: 
+			# 1) Train RF (50% of data)
+			# 2) Get RF outputs with which train RF classifier (50% of data)
+			train_index = traini[0: int(0.5*X.shape[0])]
+			train_index2 =  traini[int(0.5*X.shape[0]):X.shape[0]]
+			
+
+			# Training 5 regressors on 5 types of features
+			i=0
+			for data in [activityData,screenData,conversationData,colocationData,audioData]:
+				RF.append(RandomForestRegressor(n_estimators=300,max_features=None,n_jobs=-1))
+				# Train RF regressor on first subset
+
+				RF[i].fit(data[train_index],Y[train_index])
+				# Get RF predictions on second subset
+				outputRF.append( RF[i].predict(data[train_index2]) )
+				# Get RF outputs on LOSO data
+				outRFtest.append(RF[i].predict(data[testi]))
+				i += 1
+
+			middleTrainMat = np.transpose(np.array(outputRF))
+			testMat = np.transpose(np.array(outRFtest))
 		
 
+			# RF classifier to combine regressors
+			rfr= RandomForestClassifier(n_estimators=300,max_features=None,n_jobs=-1)
+			print(middleTrainMat.shape, Y[train_index2].shape)
+
+			rfr.fit(middleTrainMat,Y[train_index2])
+			pred = rfr.predict(testMat)
+			# Print to screen mean error and Tolerance Score
+			totalacc += tolAcc(Y[testi],pred,testMat)
+
+			del outputRF[:]
+			del outRFtest[:]
+		print('LOSO TP accuracy with Undesampling: {0}'.format(totalacc/16))
 
 
 
