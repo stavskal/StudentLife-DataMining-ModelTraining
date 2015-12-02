@@ -78,30 +78,29 @@ def fiPlot(rf):
 
 def main(argv):
 	X=np.load('numdata/epochFeats.npy')
-	Y=np.transpose(np.array([np.load('numdata/epochLabels.npy')]))
-	labels= np.transpose(np.array([np.load('numdata/LOO.npy')]))
+	Y=np.load('numdata/epochLabels.npy')
+	labels= np.load('numdata/LOO.npy')
 
 
 
 	if sys.argv[1]=='-first':
-		Y = np.load('numdata/epochLabels.npy')
 		print(X.shape, Y.shape, labels.shape)
 		folds=10
-
 		#Pipeline stuff 
 		forest = RandomForestRegressor(n_estimators=100, n_jobs = -1)
 		scaler = preprocessing.StandardScaler()
 
-		lolo = LeaveOneLabelOut(labels)
-		
+		lolo = LeaveOneLabelOut(labels)	
+		print(lolo,len(lolo))
 		acc = 0
 
 		us = UnderSampler(verbose=True)
 
-		X,Y = us.fit_transform(X,Y)
+		#X,Y = us.fit_transform(X,Y)
 		kf = KFold(Y.shape[0],n_folds=folds)
-		for train_index,test_index in kf:
-		#	print max(train_index),max(test_index)
+		for train_index,test_index in lolo:
+
+			print(len(train_index),len(test_index))
 			Xtrain,Xtest = X[train_index], X[test_index]
 			ytrain,ytest = Y[train_index], Y[test_index]
 			
@@ -109,20 +108,18 @@ def main(argv):
 
 
 			scores = forest.predict(Xtest)
-			acc += tolAcc(ytest,scores)
+			#acc += tolAcc(ytest,scores)
 			
 		print(acc/folds)
 
 
 
-	# Ensemble Random Forest Regressor stacked with Neural Network	
+	# Ensemble Random Forest Regressor stacked with Random Forest Classifier
 	elif sys.argv[1]=='-ensemble':
 		RF  = []
 		outputRF = []
 		outRFtest=[]
-		folds = 20
-		Y = np.load('numdata/epochLabels.npy')
-		#	Y=Y+1
+	
 		us = UnderSampler(verbose=True)
 		#cc = ClusterCentroids(verbose=True)
 		#X,Y = us.fit_transform(X,Y)
@@ -135,6 +132,7 @@ def main(argv):
 		colocationData = X[:,20:26]
 		audioData = X[:,26:X.shape[1]]
 
+		# Custom Cross-Validation
 		# Indexes is used to split the dataset in a 40/40/20 manner
 		# NOTE: 30/30/40 seemed to produce very similar results
 		indexes = np.array([i for i in range(X.shape[0])])
@@ -148,7 +146,7 @@ def main(argv):
 		train_index2 =  indexes[int(0.3*X.shape[0]):int(0.6*X.shape[0])]
 		test_index = indexes[int(0.6*X.shape[0]):X.shape[0]]
 
-		# Training 4 regressors on 4 types of features
+		# Training 5 regressors on 5 types of features
 		i=0
 		for data in [activityData,screenData,conversationData,colocationData,audioData]:
 			RF.append(RandomForestRegressor(n_estimators=300,max_features=None,n_jobs=-1))
@@ -164,7 +162,7 @@ def main(argv):
 					  ('dense',DenseLayer),
 					  ('output',DenseLayer)]
 
-
+		# Currently not used
 		# Just a linear combination of the inputs is enough
 		net = NeuralNet(layers = layers_all,
 	 					 input_shape = (None,5),
@@ -178,11 +176,12 @@ def main(argv):
 	 					 max_epochs=60,) # 60 epochs is enough, usually converges around 30-40
 
 
-		#net.fit(middleTrainMat,Y[train_index2])
+		# RF classifier to combine regressors
 		rfr= RandomForestClassifier(n_estimators=300,n_jobs=-1)
 		rfr.fit(middleTrainMat,Y[train_index2])
 		print(middleTrainMat.shape)
 		net.fit(middleTrainMat,Y[train_index2])
+		
 		# save figure of learning curve
 		visualizeError(net)
 		
