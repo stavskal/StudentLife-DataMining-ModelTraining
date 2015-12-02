@@ -361,7 +361,7 @@ def activityEpochFeats(cur,uid,timestamp):
 
 
 
-def audioEpochFeats(cuir,uid,timestamp):
+def audioEpochFeats(cur,uid,timestamp):
 	""" Returns voice to silence ratio and total noise occurences in three epochs
 		one day prior to report
 	"""
@@ -371,7 +371,7 @@ def audioEpochFeats(cuir,uid,timestamp):
 	noise = np.zeros(3)
 	voice = np.zeros(3)
 
-	voiseToSilenceRatio = np.zeros(3)
+	voiceToSilenceRatio = np.zeros(3)
 
 	cur.execute('SELECT time_stamp, audio FROM {0} WHERE time_stamp >= {1} AND time_stamp<= {2}'.format(uidA,timestamp-2*halfday,timestamp))
 	records = cur.fetchall()
@@ -388,7 +388,6 @@ def audioEpochFeats(cuir,uid,timestamp):
 				voice[0] += 1
 			else:
 				noise[0] +=1
-
 
 		if timeEpochs[i][0]=='evening':
 			if records[i][1]==0:
@@ -408,9 +407,9 @@ def audioEpochFeats(cuir,uid,timestamp):
 
 	for i in range(0,3):
 		if silence[i]>0:
-			noiseToSilenceRatio[i] = float(voice[i]) / silence[i]
+			voiceToSilenceRatio[i] = float(voice[i]) / silence[i]
 
-	return(np.concatenate((voiseToSilenceRatio,noice),axis=0))
+	return(np.concatenate((voiceToSilenceRatio,noise),axis=0))
 
 
 #testing
