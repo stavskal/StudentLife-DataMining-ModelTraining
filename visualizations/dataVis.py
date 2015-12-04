@@ -4,11 +4,40 @@ import seaborn as sns
 import psycopg2,random
 import datetime as dt
 from unbalanced_dataset import UnderSampler
+from sklearn.cluster import KMeans
 
 #from processingFunctions import *
 
 sns.set_style('darkgrid')
 sns.set(color_codes=True)
+
+x=['Feeling Great','Feeling Good','A little stressed','Definitely Stressed','Stressed Out']
+y=[62,286,292,212,156]
+
+ax = sns.barplot(x=x,y=y)
+pyp.ylim(0,592)
+pyp.title('Manually balanced distribution of stress responses')
+fig = ax.get_figure()
+fig.savefig('LabelDistAfter.png')
+exit()
+
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
+cur.execute('SELECT latitude,longitude FROM u33gpsdata')
+records = cur.fetchall()
+
+
+
+print(len(records))
+longitude = [item[1] for item in records ]
+latitude = [item[0] for item in records ]
+
+pyp.scatter(latitude,longitude)
+pyp.savefig('gpsplot.png')
+
+
+
+"""
 #heat = np.array([[62.06,63.34, 60.70,60.8 ,54],[60.44,61.14, 55.38, 63.99, 60.05],[67.1,60.6, 60.54,57.52,58.14]])
 #print(heat.shape)
 uids=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49','Mean']
@@ -48,7 +77,7 @@ for label, xi, yi in zip(uids,x,y):
         arrowprops = dict(arrowstyle = '->', connectionstyle = 'arc3,rad=0'))
 
 pyp.savefig('losoUser1.png')
-"""
+
 ax1 = sns.heatmap(heat, vmin=50, vmax=65)
 
 pyp.title('Cross-Validation Accuracy Heatmap')
