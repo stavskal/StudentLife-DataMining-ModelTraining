@@ -2,7 +2,7 @@ import json,csv,sys,os,psycopg2,random
 import numpy as np
 from collections import Counter 
 from processingFunctions import *
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier
 from sklearn.metrics import precision_score, recall_score, confusion_matrix
 from sklearn.cross_validation import cross_val_predict, StratifiedKFold, KFold,cross_val_score, LeaveOneLabelOut
 from sklearn.pipeline import Pipeline
@@ -33,11 +33,34 @@ def visualizeError(net):
 	plt.savefig('trainvalloss.png')
 
 
-def visualizeErrDist(y,pred):
-	x =[]
-	for i in pred:
-		if i>=0 and i<=1:
-			x.append()
+def deleteClassTwo(X,y,num):
+	"""Delete 'num' samples of most populated stress class(='A little Stressed') in StudentLife dataset
+	"""
+	
+	twoIndex=np.array([i for i in range(len(y)) if y[i]==2])
+	np.random.shuffle(twoIndex)
+
+	if num >= 0.7*len(twoIndex):
+		print('Number of examples requested for delete too many...')
+		exit()
+
+
+	delIndex=twoIndex[0:num]
+
+	X=np.delete(X,delIndex,0)
+	y=np.delete(y,delIndex,0)
+
+	print(X.shape,y.shape)
+
+	return(X,y)
+
+
+
+
+
+
+
+
 
 
 def tolAcc(y,pred,testMat):
@@ -47,9 +70,13 @@ def tolAcc(y,pred,testMat):
 	correct=0
 	truecorrect=0
 	errors=[]
+	distY = np.zeros(5)
+	distP = np.zeros(5)
 	for i in range(0,len(y)):
 		errors.append(np.absolute(y[i]-pred[i]))
-	#	print('Pred,True: {0},{1} Data: {2}'.format(pred[i],y[i],testMat[i,:]))
+		#	print('Pred,True: {0},{1} Data: {2}'.format(pred[i],y[i],testMat[i,:]))
+		distP[pred[i]] += 1
+		distY[y[i]] += 1
 		if errors[i]<=1:
 			correct+=1
 		if errors[i]==0:
@@ -58,8 +85,10 @@ def tolAcc(y,pred,testMat):
 	truescore = float(truecorrect)/len(y)
 	meanEr = sum(errors)/len(errors)
 	print('Mean error: {0}'.format(meanEr))
-	print('Min max prediction: {0},{1}'.format(min(pred),max(pred)))
-	return((score*100,truescore*100))
+	print('Prediction distribution: {0}'.format(distP/float(sum(distP))))
+	print('Label distribution:      {0}'.format(distY/float(sum(distY))))
+
+	return(score*100,truescore*100)
 
 def fiPlot(rf):
 	""" Bar plot of feature importances of RF
@@ -80,6 +109,8 @@ def main(argv):
 	X=np.load('numdata/epochFeats.npy')
 	Y=np.load('numdata/epochLabels.npy')
 	labels= np.load('numdata/LOO.npy')
+	print(X.shape,Y.shape)
+	X,Y = deleteClassTwo(X,Y,330)
 
 
 
@@ -121,13 +152,13 @@ def main(argv):
 		outRFtest=[]
 	
 		us = UnderSampler(verbose=True)
-		#cc = ClusterCentroids(verbose=True)
-		#X,Y = us.fit_transform(X,Y)
+		cc = ClusterCentroids(verbose=True)
+		#X,Y = cc.fit_transform(X,Y)
 		print(X.shape,Y.shape)
 
 		# separating features into categories for Ensemble Training
 		activityData = X[:,0:3 ]
-		screenData = X[:,3:14]
+		screenData = X[:,3:14]	
 		conversationData = X[:,14:20 ]
 		colocationData = X[:,20:26]
 		audioData = X[:,26:X.shape[1]]
@@ -139,15 +170,15 @@ def main(argv):
 		np.random.shuffle(indexes)
 
 		lolo = LeaveOneLabelOut(labels)	
-		print(lolo,len(lolo))
+	#	print(lolo,len(lolo))
 		# separating data to 3 subsets: 
 		# 1) Train RF
 		# 2) Get RF outputs with which train NN
 		# 3) Test NN output on the rest
-		train_index = indexes[0: int(0.3*X.shape[0])]
-		train_index2 =  indexes[int(0.3*X.shape[0]):int(0.6*X.shape[0])]
-		test_index = indexes[int(0.6*X.shape[0]):X.shape[0]]
-
+		train_index = indexes[0: int(0.35*X.shape[0])]
+		train_index2 =  indexes[int(0.35*X.shape[0]):int(0.7*X.shape[0])]
+		test_index = indexes[int(0.7*X.shape[0]):X.shape[0]]
+		print(len(train_index),len(train_index2),len(test_index	))
 		# Training 5 regressors on 5 types of features
 		i=0
 		for data in [activityData,screenData,conversationData,colocationData,audioData]:
@@ -162,7 +193,8 @@ def main(argv):
 	
 
 		# RF classifier to combine regressors
-		rfr= RandomForestClassifier(n_estimators=300,n_jobs=-1)
+		class_weights={0 : 1, 1 : 0.4 , 2 : 0.4 , 3 : 0.9, 4 : 1}
+		rfr= ExtraTreesClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
 		rfr.fit(middleTrainMat,Y[train_index2])
 		print(middleTrainMat.shape)
 
