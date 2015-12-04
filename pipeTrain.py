@@ -33,11 +33,11 @@ def visualizeError(net):
 	plt.savefig('trainvalloss.png')
 
 
-def deleteClassTwo(X,y,num):
-	"""Delete 'num' samples of most populated stress class(='A little Stressed') in StudentLife dataset
+def deleteClass(X,y,num,c):
+	"""Delete 'num' samples from class='class' in StudentLife dataset stress reports
 	"""
 	
-	twoIndex=np.array([i for i in range(len(y)) if y[i]==2])
+	twoIndex=np.array([i for i in range(len(y)) if y[i]==c])
 	np.random.shuffle(twoIndex)
 
 	if num >= 0.7*len(twoIndex):
@@ -110,7 +110,8 @@ def main(argv):
 	Y=np.load('numdata/epochLabels.npy')
 	labels= np.load('numdata/LOO.npy')
 	print(X.shape,Y.shape)
-	X,Y = deleteClassTwo(X,Y,330)
+	X,Y = deleteClass(X,Y,330,2)
+	X,Y = deleteClass(X,Y,70,1)
 
 
 
@@ -175,9 +176,9 @@ def main(argv):
 		# 1) Train RF
 		# 2) Get RF outputs with which train NN
 		# 3) Test NN output on the rest
-		train_index = indexes[0: int(0.35*X.shape[0])]
-		train_index2 =  indexes[int(0.35*X.shape[0]):int(0.7*X.shape[0])]
-		test_index = indexes[int(0.7*X.shape[0]):X.shape[0]]
+		train_index = indexes[0: int(0.5*X.shape[0])]
+		train_index2 =  indexes[int(0.5*X.shape[0]):int(0.8*X.shape[0])]
+		test_index = indexes[int(0.8*X.shape[0]):X.shape[0]]
 		print(len(train_index),len(train_index2),len(test_index	))
 		# Training 5 regressors on 5 types of features
 		i=0
@@ -193,7 +194,8 @@ def main(argv):
 	
 
 		# RF classifier to combine regressors
-		class_weights={0 : 1, 1 : 0.4 , 2 : 0.4 , 3 : 0.9, 4 : 1}
+		class_weights={0 : 1, 1 : 0.5 , 2 : 0.1 , 3 : 0.6, 4 :1}
+		print(class_weights)
 		rfr= ExtraTreesClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
 		rfr.fit(middleTrainMat,Y[train_index2])
 		print(middleTrainMat.shape)
