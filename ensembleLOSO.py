@@ -17,7 +17,7 @@ from nolearn.lasagne.visualize import plot_loss
 from lasagne.layers import InputLayer
 from lasagne.layers import DenseLayer
 from lasagne.nonlinearities import softmax,sigmoid,tanh,rectify
-from pipeTrain import deleteClassTwo
+from pipeTrain import deleteClass
 
 def visualizeError(net):
 	train_loss = np.array([i["train_loss"] for i in net.train_history_])
@@ -32,13 +32,6 @@ def visualizeError(net):
 #pyplot.ylim(1e-3, 1e-2)
 	#plt.yscale("log")
 	plt.savefig('trainvalloss.png')
-
-
-def visualizeErrDist(y,pred):
-	x =[]
-	for i in pred:
-		if i>=0 and i<=1:
-			x.append()
 
 
 def tolAcc(y,pred,testMat):
@@ -82,7 +75,7 @@ def main(argv):
 	Y=np.load('numdata/epochLabels.npy')
 	labels= np.load('numdata/LOO.npy')
 
-	#X,Y = deleteClassTwo(X,y,330)
+	#X,Y = deleteClass(X,Y,330,2)
 
 	if sys.argv[1]=='-first':
 		print(X.shape, Y.shape, labels.shape)
@@ -173,9 +166,9 @@ def main(argv):
 		
 
 			# RF classifier to combine regressors
-			class_weights={0 : 1, 1 : 0.6 , 2 : 0.25 , 3 : 0.7, 4 :1}
-			rfr= ExtraTreesClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
-		#	print(middleTrainMat.shape, Y[train_index2].shape)
+			# assigning smaller weights to most popular class_weightsx	
+			class_weights={0 : 1, 1 : 0.6 , 2 : 0.1 , 3 : 0.7, 4 :1}
+			rfr= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
 
 			rfr.fit(middleTrainMat,Y[train_index2])
 			pred = rfr.predict(testMat)
@@ -183,10 +176,11 @@ def main(argv):
 			tempacc = tolAcc(Y[testi],pred,testMat)
 			print(tempacc)
 			totalacc += tempacc
+			print(rfr.feature_importances_)
 
 			del outputRF[:]
 			del outRFtest[:]
-		print('LOSO TP accuracy with Undesampling: {0}'.format(totalacc/16))
+		print('LOSO TP accuracy: {0}'.format(totalacc/16))
 
 
 
