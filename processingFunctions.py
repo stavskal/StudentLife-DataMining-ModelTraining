@@ -1,8 +1,11 @@
 import datetime,psycopg2
 from collections import Counter
 import numpy as np
+import math
 from sortedcontainers import SortedDict
 from sklearn import preprocessing
+from geopy.distance import great_circle
+
 #---------------------------------------------
 #This script contains a collection of functions
 #that are useful in processing the data in
@@ -31,8 +34,11 @@ uids1=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','
 
 
 #---------------------------------------------------------------------------------------
-# converts unix timestamp to human readable date (e.g '1234567890' -> '2009 02 14  00 31 30')
+
 def unixTimeConv(timestamps):
+	""" converts unix timestamp to human readable date 
+		(e.g '1234567890' -> '2009 02 14  00 31 30')
+	"""
 	splitTimes = np.zeros((len(timestamps), 7),dtype='float32')
 	i=0
 	#print(timestamps)
@@ -46,8 +52,11 @@ def unixTimeConv(timestamps):
 	return(splitTimes)
 
 #----------------------------------------------------------------------------------------
-# converts timestamp to epoch (day,evening,night) pretty straightforward right?
+
 def epochCalc(timestamps):
+	""" converts timestamp to epoch (day,evening,night) 
+		and returns (epoch,time) tuple
+	"""
 	splitTimes = unixTimeConv(timestamps)
 	epochTimes = []
 	for i in range(0,len(splitTimes)):
@@ -63,9 +72,11 @@ def epochCalc(timestamps):
 	return epochTimes
 
 #-----------------------------------------------------------------------
-# computes average time between stress reports in order to find the optimal 
-# time window for the app statistics calculation to reduce overlapping of features
+
 def meanStress(cur,uid):
+	""" computes average time between stress reports in order to find the optimal 
+	    time window for the app statistics calculation to reduce overlapping of features
+	"""
 	records = sorted( loadStressLabels(cur,uid) , key=lambda x:x[0] )
 	mean = 0 
 
@@ -77,9 +88,11 @@ def meanStress(cur,uid):
 
 
 #---------------------------------------------------------------------------------------
-# counts occurences of bag-of-apps for given user 'uid' during experiment
-# in the average report time window around 'timeQuery' stress report
+
 def countAppOccur(cur,uid,timeQuery,timeW):
+	""" counts occurences of bag-of-apps for given user 'uid' during experiment
+	    in the average report time window around 'timeQuery' stress report
+	"""
 	cur.execute("SELECT running_task_id  FROM appusage WHERE uid = %s AND time_stamp <= %s AND time_stamp>=%s;",[uid,timeQuery,timeQuery-timeW])
 
 	#Counter class counts occurrences of unique ids
@@ -94,8 +107,10 @@ def countAppOccur(cur,uid,timeQuery,timeW):
 
 
 #---------------------------------------------------------------------------------------
-# returns True if screen was On at given time, false otherwise
+
 def checkScreenOn(cur,uid,time):
+	""" returns True if screen was On at given time, false otherwise
+	"""
 	uid = uid +'lock'
 	time = int(time)
 	cur.execute("SELECT * FROM {0} WHERE timeStart <= {1} AND timeStop >={2} ; ".format(uid,time,time) )
@@ -108,8 +123,10 @@ def checkScreenOn(cur,uid,time):
 
 
 #---------------------------------------------------------------------------------------
-# retrieves stress labels for user 'uid' and returns a list with their corresponding timestamps
+
 def loadStressLabels(cur,uid):
+	"""retrieves stress labels for user 'uid' and returns a list with their corresponding timestamps
+	"""
 	cur.execute("SELECT time_stamp,stress_level  FROM {0} ".format(uid) )
 	records = cur.fetchall()
 
@@ -412,6 +429,34 @@ def audioEpochFeats(cur,uid,timestamp):
 	return(np.concatenate((voiceToSilenceRatio,noise),axis=0))
 
 
+# NOT TESTED YET
+def gpsEpochFeats(cur,uid,timestamp):
+	variances = np.zeros(2)
+	cur.execute('SELECT time_stamp,latitude,longitude,travelstate FROM {0}'.format(uid+'gpsdata'))
+	records = cur.fetchall()
+	distances = []
+	places =[]
+	differentPlaces=0
+	totalDistCovered = 0
+
+	# variance of latitudes and longitudes
+	variances[0] = np.var([i[1] for i in records])
+	variances[1] = np.var([i[2] for i in records])
+
+	locationVar = np.log(variance[0] + variance[1])
+
+	for i in range(1,len(records)):
+		# threshold for distinguishing different places is 0.001 due to gps inaccuracy
+		if(np.abs(rec[i-1][0]-rec[i][0])<0.001 and np.abs(rec[i-1][1]-rec[i][1])<0.001):
+			#do stuff
+			continue
+		else:
+			differentPlaces += 1
+
+		tempDist = great_circle(rec[i-1],rec[i]).meters
+		totalDistCovered += tempDist	
+		distances.append(tempDist)
+
 #testing
 #con = psycopg2.connect(database='dataset', user='tabrianos')
 #cur = con.cursor()
@@ -424,7 +469,7 @@ def audioEpochFeats(cur,uid,timestamp):
 #print(activityEpochFeats(cur,'u00',t))
 #print(conversationStats(cur,'u00',t))
 #print(audioEpochFeats(cur,'u00',t))
-
+#print(gcd(43.7066671,-72.2890974,  43.7067476, -72.2892027))
 #print(colocationStats(cur,'u00',t ))
 #d = countAppOccur(cur,'u59',30,t)
 #loadStressLabels(cur,'u01')
@@ -441,12 +486,5 @@ def audioEpochFeats(cur,uid,timestamp):
 #print(checkScreenOn(cur,'u00',num))
 
 
-#[DONE]: function that produces labels [stressed/not stressed] from surveys [DONE]
-#[DONE]: function that computes application usage statistics in time window (hour/day/week) (frequency)
-#[DONE]: function that computes time intervals between subsequent app usages (not background, only user ) cross-checked with screen info
-
-
 #TODO: migrate database to NoSQL																																																																																																																																																									
-#TODO: function that computes sms+calls statistical features in time window (how many sms, how many people)
-#NOTE: some call+sms logs do not contain any data (maybe corrupted download?)
 
