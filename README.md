@@ -1,11 +1,13 @@
 # StudentLife-DataMining
 Colllection of scripts to mine information from StudentLife Dataset
 
-The collected Data is inserted into a PostgreSQL database schema into many different tables.
+###The collected Data is inserted into a PostgreSQL database schema into many different tables.
 
-* training.py is the main script used for Model training to predict participant's stress level
+* ensembleLOSO.py Trains a stacked ensemble mix of Regression and Classification while Cross-Validating with Leave One (Student) Out
 
-* processingFunctions.py provides many usefull functions to assist the above process
+* ensembleUserSpecific Trains the same stacked architecture, only this time the model is personalized
+
+* processingFunctions.py provides many usefull functions to construct features
 
 * sleepNNreg.py trains a model to predict length of sleep time
 * 
