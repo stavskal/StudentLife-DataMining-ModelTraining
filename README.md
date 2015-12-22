@@ -1,7 +1,7 @@
 # StudentLife-DataMining
-Colllection of scripts to mine information from StudentLife Dataset
+###Colllection of scripts to mine information from StudentLife Dataset
 
-###The collected Data is inserted into a PostgreSQL database schema into many different tables.
+The collected Data is inserted into a PostgreSQL database schema into many different tables.
 
 * ensembleLOSO.py Trains a stacked ensemble mix of Regression and Classification while Cross-Validating with Leave One (Student) Out
 
