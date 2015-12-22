@@ -75,42 +75,10 @@ def main(argv):
 	Y=np.load('numdata/epochLabels.npy')
 	labels= np.load('numdata/LOO.npy')
 
-	#X,Y = deleteClass(X,Y,330,2)
-
-	if sys.argv[1]=='-first':
-		print(X.shape, Y.shape, labels.shape)
-		folds=10
-		#Pipeline stuff 
-		forest = RandomForestRegressor(n_estimators=100, n_jobs = -1)
-		scaler = preprocessing.StandardScaler()
-
-		lolo = LeaveOneLabelOut(labels)	
-		print(lolo,len(lolo))
-		acc = 0
-
-		us = UnderSampler(verbose=True)
-
-		#X,Y = us.fit_transform(X,Y)
-		kf = KFold(Y.shape[0],n_folds=folds)
-		for train_index,test_index in lolo:
-
-			print(len(train_index),len(test_index))
-			print (train_index,test_index)
-			Xtrain,Xtest = X[train_index], X[test_index]
-			ytrain,ytest = Y[train_index], Y[test_index]
-			
-			forest.fit(Xtrain,ytrain)
-
-
-			scores = forest.predict(Xtest)
-			#acc += tolAcc(ytest,scores)
-			
-		print(acc/folds)
-
 
 
 	# Ensemble Random Forest Regressor stacked with Random Forest Classifier
-	elif sys.argv[1]=='-ensemble':
+	if sys.argv[1]=='-ensemble':
 		RF  = []
 		outputRF = []
 		outRFtest=[]
@@ -146,7 +114,6 @@ def main(argv):
 			# 2) Get RF outputs with which train RF classifier (40% of data)
 			train_index = traini[0: int(0.6*len(traini))]
 			train_index2 =  traini[int(0.6*len(traini)):len(traini)]
-		#	print(len(train_index),len(train_index2))
 
 			# Training 5 regressors on 5 types of features
 			i=0
@@ -166,17 +133,18 @@ def main(argv):
 		
 
 			# RF classifier to combine regressors
-			# assigning smaller weights to most popular class_weightsx	
-			class_weights={0 : 1, 1 : 0.6 , 2 : 0.1 , 3 : 0.7, 4 :1}
+			# assigning smaller weights to most popular class_weights	
+			class_weights={0 : 1, 1 : 0.4 , 2 : 0.1 , 3 : 0.4, 4 :1}
 			rfr= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
 
 			rfr.fit(middleTrainMat,Y[train_index2])
 			pred = rfr.predict(testMat)
+
 			# Print to screen mean error and Tolerance Score
 			tempacc = tolAcc(Y[testi],pred,testMat)
-			print(tempacc)
+			#print(tempacc)
 			totalacc += tempacc
-			print(rfr.feature_importances_)
+			#print(rfr.feature_importances_)
 
 			del outputRF[:]
 			del outRFtest[:]
