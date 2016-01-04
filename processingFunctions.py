@@ -492,12 +492,12 @@ def gpsEntropyFeat(centers,gpscoords):
 
 
 #testing
-con = psycopg2.connect(database='dataset', user='tabrianos')
-cur = con.cursor()
-centers = np.load('visualizations/clustercenters.npy')
-t = 1368481065
+#con = psycopg2.connect(database='dataset', user='tabrianos')
+#cur = con.cursor()
+#centers = np.load('visualizations/clustercenters.npy')
+#t = 1368481065
 
-gpsFeats(cur,'u19',t,centers)
+#gpsFeats(cur,'u19',t,centers)
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
 #t1= 1365111111
