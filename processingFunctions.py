@@ -5,6 +5,8 @@ import math
 from sortedcontainers import SortedDict
 from sklearn import preprocessing
 from geopy.distance import great_circle
+from scipy.spatial.distance import euclidean
+from scipy.stats import entropy
 
 #---------------------------------------------
 #This script contains a collection of functions
@@ -430,39 +432,74 @@ def audioEpochFeats(cur,uid,timestamp):
 
 
 # NOT TESTED YET
-def gpsEpochFeats(cur,uid,timestamp):
+def gpsFeats(cur,uid,timestamp,centers):
+	# number of clusters as defined by DBSCAN: 14 + 1 for out of town
+	# p will hold the percentage of time spent during previous day in each cluster 
+	p = np.zeros(15)
+
 	variances = np.zeros(2)
-	cur.execute('SELECT time_stamp,latitude,longitude,travelstate FROM {0}'.format(uid+'gpsdata'))
+	cur.execute("SELECT time_stamp,latitude,longitude FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2} AND travelstate=0".format(uid+'gpsdata',timestamp-day,timestamp))
 	records = cur.fetchall()
-	distances = []
-	places =[]
-	differentPlaces=0
-	totalDistCovered = 0
 
 	# variance of latitudes and longitudes
 	variances[0] = np.var([i[1] for i in records])
 	variances[1] = np.var([i[2] for i in records])
 
-	locationVar = np.log(variance[0] + variance[1])
+	locationVar = np.log(variances[0] + variances[1])
 
-	for i in range(1,len(records)):
-		# threshold for distinguishing different places is 0.001 due to gps inaccuracy
-		if(np.abs(rec[i-1][0]-rec[i][0])<0.001 and np.abs(rec[i-1][1]-rec[i][1])<0.001):
-			#do stuff
-			continue
+	for i in range(0,len(records)):
+		# if user is in campus assign him to one of 14 clusters
+		# otherwise assign to 15th cluster which stands for 'Out-of-town'
+		if records[i][1] > 43.60 and records[i][1] <43.75:
+			if records[i][2] > -72.35 and records[i][2] < -72.2:
+				# for every gps coordinate pair calculate the distance from cluster
+				# centers and assign to the nearest
+				distFromCenters = np.apply_along_axis(my_greatcircle,1,centers,np.array(records[i][1:3]))
+				mindist = np.argmin(distFromCenters)
+				p[mindist] += 1
+			
 		else:
-			differentPlaces += 1
+			# student is out of town
+			p[14] += 1
 
-		tempDist = great_circle(rec[i-1],rec[i]).meters
-		totalDistCovered += tempDist	
-		distances.append(tempDist)
+	#calculating GPS entropy
+	e = entropy(p/float(sum(p)))
+	featureVector = np.array([[e,variances[0],variances[1]]])
+	print(featureVector)
+	return e
+
+
+def my_greatcircle(a,b):
+	return(great_circle(a,b).meters)
+
+"""
+def gpsEntropyFeat(centers,gpscoords):
+	# number of clusters as defined by DBSCAN: 14
+	# p will hold the percentage of time spent during previous
+	# day in each cluster 
+	p = np.zeros(14)
+
+	# for every gps coordinate pair calculate the distance from cluster
+	# centers and assign to the nearest one
+	for coordpair in gpscoords:
+		distances = np.apply_along_axis(my_greatcircle,1,centers,coordpair)
+		mindist = np.argmin(distances)
+		p(mindist) += 1
+
+"""
+
+
+
 
 #testing
-#con = psycopg2.connect(database='dataset', user='tabrianos')
-#cur = con.cursor()
+con = psycopg2.connect(database='dataset', user='tabrianos')
+cur = con.cursor()
+centers = np.load('visualizations/clustercenters.npy')
+t = 1368481065
+
+gpsFeats(cur,'u19',t,centers)
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
-#t = 1366499395
 #t1= 1365111111
 #print(colocationEpochFeats(cur,'u00',t1))
 #print(convEpochFeats(cur,'u00',t))
