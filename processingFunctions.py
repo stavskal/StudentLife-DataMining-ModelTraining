@@ -31,8 +31,8 @@ uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u13',
 'u56','u57','u58','u59']
 
 # List of 'good' users
-#uids1=['u00','u02','u12','u24','u08','u57','u52','u51','u59']
-uids1=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49']
+uids1=['u00','u02']
+#uids1=['u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49','u16','u19']
 
 
 #---------------------------------------------------------------------------------------
@@ -327,6 +327,7 @@ def convEpochFeats(cur,uid,timestamp):
 	
 	# concatenating all variables into FV vector		
 	FV = np.array((totalConvsEvening,totalConvsNight,totalConvsDay,totalConvTimeN,totalConvTimeD,totalConvTimeE))
+	FV = np.nan_to_num(FV)
 	return(FV)
 
 
@@ -431,7 +432,6 @@ def audioEpochFeats(cur,uid,timestamp):
 	return(np.concatenate((voiceToSilenceRatio,noise),axis=0))
 
 
-# NOT TESTED YET
 def gpsFeats(cur,uid,timestamp,centers):
 	# number of clusters as defined by DBSCAN: 14 + 1 for out of town
 	# p will hold the percentage of time spent during previous day in each cluster 
@@ -441,53 +441,40 @@ def gpsFeats(cur,uid,timestamp,centers):
 	cur.execute("SELECT time_stamp,latitude,longitude FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2} AND travelstate=0".format(uid+'gpsdata',timestamp-day,timestamp))
 	records = cur.fetchall()
 
+	if not records:
+		return(np.zeros(2))
+
 	# variance of latitudes and longitudes
 	variances[0] = np.var([i[1] for i in records])
 	variances[1] = np.var([i[2] for i in records])
 
 	locationVar = np.log(variances[0] + variances[1])
+	
+
 
 	for i in range(0,len(records)):
+		#print(records[i][1],records[i][2])
 		# if user is in campus assign him to one of 14 clusters
-		# otherwise assign to 15th cluster which stands for 'Out-of-town'
-		if records[i][1] > 43.60 and records[i][1] <43.75:
-			if records[i][2] > -72.35 and records[i][2] < -72.2:
-				# for every gps coordinate pair calculate the distance from cluster
-				# centers and assign to the nearest
-				distFromCenters = np.apply_along_axis(my_greatcircle,1,centers,np.array(records[i][1:3]))
-				mindist = np.argmin(distFromCenters)
-				p[mindist] += 1
-			
+		# otherwise assign to 15th cluster which stands for 'out-of-town'
+		if (records[i][1] > 43.60 and records[i][1] <43.75 and records[i][2] > -72.35 and records[i][2] < -72.2):
+			# for every gps coordinate pair calculate the distance from cluster
+			# centers and assign to the nearest
+			distFromCenters = np.apply_along_axis(my_greatcircle,1,centers,np.array(records[i][1:3]))
+			mindist = np.argmin(distFromCenters)
+			p[mindist] += 1
 		else:
 			# student is out of town
 			p[14] += 1
 
 	#calculating GPS entropy
 	e = entropy(p/float(sum(p)))
-	featureVector = np.array([[e,variances[0],variances[1]]])
-	print(featureVector)
-	return e
+	featureVector = np.nan_to_num(np.array([e,locationVar]))
+
+	return featureVector
 
 
 def my_greatcircle(a,b):
 	return(great_circle(a,b).meters)
-
-"""
-def gpsEntropyFeat(centers,gpscoords):
-	# number of clusters as defined by DBSCAN: 14
-	# p will hold the percentage of time spent during previous
-	# day in each cluster 
-	p = np.zeros(14)
-
-	# for every gps coordinate pair calculate the distance from cluster
-	# centers and assign to the nearest one
-	for coordpair in gpscoords:
-		distances = np.apply_along_axis(my_greatcircle,1,centers,coordpair)
-		mindist = np.argmin(distances)
-		p(mindist) += 1
-
-"""
-
 
 
 
@@ -496,8 +483,7 @@ def gpsEntropyFeat(centers,gpscoords):
 #cur = con.cursor()
 #centers = np.load('visualizations/clustercenters.npy')
 #t = 1368481065
-
-#gpsFeats(cur,'u19',t,centers)
+#print(gpsFeats(cur,'u19',t,centers))
 #print(screenStatFeatures(cur,'u00',1365183210,meanStress(cur,'u00')))
 #print(meanStress(cur,'u00'))
 #t1= 1365111111
