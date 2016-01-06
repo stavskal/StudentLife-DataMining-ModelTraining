@@ -71,10 +71,10 @@ def fiPlot(rf):
 
 
 def main(argv):
-	X=np.load('numdata/epochFeats.npy')
-	Y=np.load('numdata/epochLabels.npy')
-	labels= np.load('numdata/LOO.npy')
-
+	X=np.load('numdata/withgps/epochFeats.npy')
+	Y=np.load('numdata/withgps/epochLabels.npy')
+	labels= np.load('numdata/withgps/LOO.npy')
+	X = preprocessing.Imputer().fit_transform(X)
 
 
 	# Ensemble Random Forest Regressor stacked with Random Forest Classifier
@@ -84,9 +84,6 @@ def main(argv):
 		outRFtest=[]
 		totalacc=0
 	
-		us = UnderSampler(verbose=True)
-		#cc = ClusterCentroids(verbose=True)
-		#X,Y = us.fit_transform(X,Y)
 		print(X.shape,Y.shape)
 
 		# separating features into categories for Ensemble Training
@@ -96,15 +93,8 @@ def main(argv):
 		colocationData = X[:,20:26]
 		audioData = X[:,26:X.shape[1]]
 
-		# Custom Cross-Validation
-		# Indexes is used to split the dataset in a 40/40/20 manner
-		# NOTE: 30/30/40 seemed to produce very similar results
-		indexes = np.array([i for i in range(X.shape[0])])
-		np.random.shuffle(indexes)
-
 		# I GOT IT FOR THE LOLO (baking soda)
 		lolo = LeaveOneLabelOut(labels)	
-		#print(lolo,len(lolo))
 
 
 		for traini, testi in lolo:
@@ -119,8 +109,8 @@ def main(argv):
 			i=0
 			for data in [activityData,screenData,conversationData,colocationData,audioData]:
 				RF.append(RandomForestRegressor(n_estimators=30,n_jobs=-1))
+				
 				# Train RF regressor on first subset
-
 				RF[i].fit(data[train_index],Y[train_index])
 				# Get RF predictions on second subset
 				outputRF.append( RF[i].predict(data[train_index2]) )
@@ -142,7 +132,7 @@ def main(argv):
 
 			# Print to screen mean error and Tolerance Score
 			tempacc = tolAcc(Y[testi],pred,testMat)
-			#print(tempacc)
+			print(tempacc)
 			totalacc += tempacc
 			#print(rfr.feature_importances_)
 
