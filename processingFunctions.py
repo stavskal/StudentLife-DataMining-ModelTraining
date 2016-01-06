@@ -232,9 +232,7 @@ def screenStatFeatures(cur,uid,timestamp,timeWin):
 
 			totalOff= totalTime -totalOn
 
-			#computing and appending statistics to returned list
-			#featList.extend(np.mean(timeOn),np.std(timeOn),np.var(timeOn),)
-			
+			#computing and appending statistics to returned list			
 			featList.append(np.mean(timeOn))
 			featList.append(np.std(timeOn))
 			featList.append(np.var(timeOn))
@@ -270,7 +268,8 @@ def colocationEpochFeats(cur,uid,timestamp):
 	times =[item[0] for item in records]
 	timeEpochs = epochCalc(times)
 
-	#for every epoch count the total number of people around
+	# for every epoch count the total number of people around
+	# and compute the average no of people
 	for ep in ['day','evening','night']:
 		timesE = [item[1] for item in timeEpochs if item[0]==ep ]
 		
@@ -326,7 +325,7 @@ def convEpochFeats(cur,uid,timestamp):
 			totalConvTimeN += records[i][1]-records[i][0]
 	
 	# concatenating all variables into FV vector		
-	FV = np.array((totalConvsEvening,totalConvsNight,totalConvsDay,totalConvTimeN,totalConvTimeD,totalConvTimeE))
+	FV = np.array((totalConvsDay,totalConvsEvening,totalConvsNight,totalConvTimeD,totalConvTimeE,totalConvTimeN))
 	FV = np.nan_to_num(FV)
 	return(FV)
 
