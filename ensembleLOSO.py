@@ -12,26 +12,8 @@ from unbalanced_dataset import UnderSampler, ClusterCentroids
 import matplotlib.pyplot as plt
 import time
 import warnings
-from nolearn.lasagne import NeuralNet, TrainSplit
-from nolearn.lasagne.visualize import plot_loss
-from lasagne.layers import InputLayer
-from lasagne.layers import DenseLayer
-from lasagne.nonlinearities import softmax,sigmoid,tanh,rectify
-from pipeTrain import deleteClass
 
-def visualizeError(net):
-	train_loss = np.array([i["train_loss"] for i in net.train_history_])
-	valid_loss = np.array([i["valid_loss"] for i in net.train_history_])
-	plt.plot(train_loss, linewidth=3, label="train")
-	plt.plot(valid_loss, linewidth=3, label="valid")
-	plt.grid()
-	plt.legend()
-	plt.title('Learning Curve for Neural Network')
-	plt.xlabel("epoch")
-	plt.ylabel("loss")
-#pyplot.ylim(1e-3, 1e-2)
-	#plt.yscale("log")
-	plt.savefig('trainvalloss.png')
+from pipeTrain import deleteClass
 
 
 def tolAcc(y,pred,testMat):
@@ -74,6 +56,8 @@ def main(argv):
 	X=np.load('numdata/withgps/epochFeats.npy')
 	Y=np.load('numdata/withgps/epochLabels.npy')
 	labels= np.load('numdata/withgps/LOO.npy')
+
+	#fixes errors with Nan data
 	X = preprocessing.Imputer().fit_transform(X)
 
 
