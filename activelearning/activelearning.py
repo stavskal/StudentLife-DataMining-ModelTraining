@@ -29,7 +29,39 @@ def tolAcc(y,pred):
 	meanEr = sum(errors)/len(errors)
 	return(score*100)
 
+def deleteClass(X,y,num,c):
+	"""Delete 'num' samples from class='class' in StudentLife dataset stress reports
+	"""
+	
+	twoIndex=np.array([i for i in range(len(y)) if y[i]==c])
+	np.random.shuffle(twoIndex)
 
+	if num >= 0.7*len(twoIndex):
+		print('Number of examples requested for delete too many. Exiting...')
+		exit()
+
+	delIndex=twoIndex[0:num]
+
+	X=np.delete(X,delIndex,0)
+	y=np.delete(y,delIndex,0)
+
+	print(X.shape,y.shape)
+
+	return(X,y)
+
+
+def activeLabeling(y1,y2):
+	y = np.abs(y1-y2)
+	occurences = np.bincount(y)
+
+	#Number of predictions in each class
+	print(np.bincount(y1),np.bincount(y2))
+
+	# Number of zeros and ones in occurences is the number of
+	# examples they 'agreed' on in the Tolerance manner
+	correct = occurences[0]+occurences[1]
+	percent = float(correct)*100 / len(y)
+	print(percent)
 
 
 
@@ -44,6 +76,17 @@ def main():
 	# fixes errors with Nan data
 	X = preprocessing.Imputer().fit_transform(X)
 	print(X.shape,Y.shape)
+
+	#Deleting examples of majority class to enforce balance
+	X,Y = deleteClass(X,Y,300,2)
+	#X,Y = deleteClass(X,Y,40,1)
+
+
+	
+	# The feature division is not clear by their column number,
+	# It was attempted intuitively while cross-checking with the 
+	# feature_importance attribute to make two equally good subspaces 
+	 
 	# Features regarding the first classifier
 	clasOneCols = [0,1,2,3,4,5,9,10,11,12,13,14,15,16,32]
 	clasOneData= X[:,clasOneCols]
@@ -52,21 +95,31 @@ def main():
 	clasTwoCols = [6,7,8,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]
 	clasTwoData= X[:,clasTwoCols]
 
-	print(clasOneData.shape, clasTwoData.shape)
+	#print(clasOneData.shape, clasTwoData.shape)
 
 	#assisning weights to penalize majority class over minority
-	class_weights={0 : 1, 1 : 0.4 , 2 : 0.1 , 3 : 0.4, 4 :1}
+	class_weights={0 : 1, 1 : 0.2 , 2 : 0.1 , 3 : 0.2, 4 :1}
 	rfr1= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
 	rfr2= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
+	rfr3= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
 
-	rfr1.fit(clasOneData[1:700],Y[1:700])
-	rfr2.fit(clasTwoData[1:700],Y[1:700])
+	n_samples = 500
+	rfr1.fit(clasOneData[1:n_samples],Y[1:n_samples])
+	rfr2.fit(clasTwoData[1:n_samples],Y[1:n_samples])	
+	rfr3.fit(X[1:n_samples],Y[1:n_samples])
 
-	pred1 = rfr1.predict(clasOneData[700:-1])
-	print(tolAcc(Y[700:-1],pred1))
+	pred1 = rfr1.predict(clasOneData[n_samples:-1])
+	print(tolAcc(Y[n_samples:-1],pred1))
 
-	pred2 = rfr2.predict(clasTwoData[700:-1])
-	print(tolAcc(Y[700:-1],pred2))
+	pred2 = rfr2.predict(clasTwoData[n_samples:-1])
+	print(tolAcc(Y[n_samples:-1],pred2))
+
+	pred3 = rfr3.predict(X[n_samples:-1])
+	print(tolAcc(Y[n_samples:-1],pred3))
+
+	pred1 = pred1.astype(np.int64)
+	pred2 = pred2.astype(np.int64)
+	activeLabeling(pred1,pred2)
 
 
 if __name__ == '__main__':
