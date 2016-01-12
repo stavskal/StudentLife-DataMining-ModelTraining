@@ -1,7 +1,6 @@
 import json,csv,sys,os,psycopg2,random
 import numpy as np
 from collections import Counter 
-from processingFunctions import *
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier
 from sklearn.metrics import precision_score, recall_score, confusion_matrix
 from sklearn.cross_validation import cross_val_predict, StratifiedKFold, KFold,cross_val_score, LeaveOneLabelOut
@@ -12,7 +11,6 @@ import matplotlib.pyplot as plt
 import time
 import warnings
 
-from pipeTrain import deleteClass
 
 sys.path.insert(0,'//home/tabrianos/Desktop/Thesis/Database/venv/ADASYN/ADASYN')
 
@@ -42,6 +40,7 @@ def tolAcc(y,pred):
 	#Number of predictions in each class
 	print('              Ground Truth ------------ Prediction')
 	print(np.bincount(y),np.bincount(pred))
+	print(truescore*100)
 	return(score*100)
 
 def fiPlot(rf):
@@ -60,6 +59,8 @@ def fiPlot(rf):
 
 
 def main(argv):
+	#Change to parent directory to load data
+	os.chdir(os.path.pardir)
 	X=np.load('numdata/withgps/epochFeats.npy')
 	Y=np.load('numdata/withgps/epochLabels.npy')
 	labels= np.load('numdata/withgps/LOO.npy')
@@ -67,10 +68,18 @@ def main(argv):
 	#fixes errors with Nan data
 	X = preprocessing.Imputer().fit_transform(X)
 
-	#BABY IM WORTH IS NANANANAN
-	adsn = ADASYN(ratio=0.5)
+	#BABY IM WORTH It NANANANAN
+	adsn = ADASYN(ratio=0.7)
 	X,Y = adsn.fit_transform(X,Y)
 	print(X.shape,Y.shape)
+
+	for i in range(0,Y.shape[0]):
+		if Y[i]==5 or Y[i]==4:
+			Y[i]=0
+		elif Y[i]==1:
+			continue
+		else:
+			Y[i]=2
 
 
 	# Ensemble Random Forest Regressor stacked with Random Forest Classifier
@@ -90,8 +99,8 @@ def main(argv):
 		audioData = X[:,26:X.shape[1]]
 
 		skf = StratifiedKFold(Y,n_folds=3)
-
-		for traini, testi in skf:
+		kf = KFold(X.shape[0],shuffle=True)
+		for traini, testi in kf:
 			print(len(traini),len(testi))
 			#np.random.shuffle(traini)
 			# separating train data to 2 subsets: 
