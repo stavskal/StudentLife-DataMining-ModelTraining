@@ -1,7 +1,6 @@
 import json,csv,sys,os,psycopg2,random
 import numpy as np
 from collections import Counter 
-from processingFunctions import *
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import precision_score, recall_score, confusion_matrix
 from sklearn.cross_validation import cross_val_predict, StratifiedKFold, KFold,cross_val_score, LeaveOneLabelOut
@@ -12,32 +11,9 @@ from unbalanced_dataset import UnderSampler, ClusterCentroids
 import matplotlib.pyplot as plt
 import time
 import warnings
-from nolearn.lasagne import NeuralNet, TrainSplit
-from nolearn.lasagne.visualize import plot_loss
-from lasagne.layers import InputLayer
-from lasagne.layers import DenseLayer
-from lasagne.nonlinearities import softmax,sigmoid,tanh,rectify
-
-def visualizeError(net):
-	train_loss = np.array([i["train_loss"] for i in net.train_history_])
-	valid_loss = np.array([i["valid_loss"] for i in net.train_history_])
-	plt.plot(train_loss, linewidth=3, label="train")
-	plt.plot(valid_loss, linewidth=3, label="valid")
-	plt.grid()
-	plt.legend()
-	plt.title('Learning Curve for Neural Network')
-	plt.xlabel("epoch")
-	plt.ylabel("loss")
-#pyplot.ylim(1e-3, 1e-2)
-	#plt.yscale("log")
-	plt.savefig('trainvalloss.png')
 
 
-def visualizeErrDist(y,pred):
-	x =[]
-	for i in pred:
-		if i>=0 and i<=1:
-			x.append()
+
 
 
 def tolAcc(y,pred,testMat):
@@ -78,17 +54,10 @@ def fiPlot(rf):
 
 
 def main(argv):
+	os.chdir(os.path.pardir)
 	X=np.load('numdata/epochFeats.npy')
 	Y=np.load('numdata/epochLabels.npy')
 	labels= np.load('numdata/LOO.npy')
-   
-	#for i in range(0,Y.shape[0]):
-	#	if Y[i]==5 or Y[i]==4:
-	#		Y[i]==0
-	#	elif Y[i]==1:
-	#		Y[i]==1
-	#	else:
-	#		Y[i]==2
 
 
 	# Ensemble Random Forest Regressor stacked with Random Forest Classifier
@@ -97,10 +66,7 @@ def main(argv):
 		outputRF = []
 		outRFtest=[]
 		totalacc=0
-	
-		us = UnderSampler(verbose=True)
-		#cc = ClusterCentroids(verbose=True)
-		#X,Y = us.fit_transform(X,Y)
+
 		print(X.shape,Y.shape)
 
 		# separating features into categories for Ensemble Training
@@ -111,8 +77,7 @@ def main(argv):
 		audioData = X[:,26:X.shape[1]]
 
 		# Custom Cross-Validation
-		# Indexes is used to split the dataset in a 40/40/20 manner
-		# NOTE: 30/30/40 seemed to produce very similar results
+		# Indexes is used to split the dataset in a 30/30/40 manner
 		indexes = np.array([i for i in range(X.shape[0])])
 		np.random.shuffle(indexes)
 
@@ -127,8 +92,8 @@ def main(argv):
 			# separating train data to 2 subsets: 
 			# 1) Train RF (50% of data)
 			# 2) Get RF outputs with which train RF classifier (50% of data)
+
 			# separating data to 3 subsets: 
-		
 			train_index = testi[0: int(0.3*len(testi))]
 			train_index2 =  testi[int(0.3*len(testi)):int(0.6*len(testi))]
 			test_index = testi[int(0.6*len(testi)):len(testi)]
@@ -149,7 +114,6 @@ def main(argv):
 			# RF classifier to combine regressors
 			rfr= RandomForestClassifier(n_estimators=300,n_jobs=-1)
 			rfr.fit(middleTrainMat,Y[train_index2])
-			#print(middleTrainMat.shape)
 
 			
 			pred = rfr.predict(testMat)
