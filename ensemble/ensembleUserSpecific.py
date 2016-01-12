@@ -81,7 +81,7 @@ def main(argv):
 	X=np.load('numdata/epochFeats.npy')
 	Y=np.load('numdata/epochLabels.npy')
 	labels= np.load('numdata/LOO.npy')
-
+   
 	#for i in range(0,Y.shape[0]):
 	#	if Y[i]==5 or Y[i]==4:
 	#		Y[i]==0
