@@ -9,6 +9,42 @@ from sklearn import preprocessing
 import matplotlib.pyplot as plt
 import time
 import warnings
+from collections import Counter
+import pandas as pd
+import seaborn as sns
+from adasyn import ADASYN
+
+
+def visualize(ac1,ac2,ac3):
+	print(ac1)
+	print(ac2)
+	print(ac3)
+
+	nac1 = np.asarray(ac1)
+	nac2 = np.asarray(ac2)
+	nac3 = np.asarray(ac3)
+
+	together = np.concatenate((nac1,nac2,nac3),axis=0)
+
+	df.append(pd.DataFrame({
+		'Class1': nac1,
+		'Class2': nac2,
+		'combined': nac3,
+		'percent' : pd.Categorical(['25' for i in range(0,len(nac1))]),
+		}))
+
+	print(df)
+
+
+	x=np.arange(3)
+	ax = plt.subplot(111)
+	ax.bar(x-0.2,ac1,width=0.2,color='b',align='center')
+	ax.bar(x,ac2,width=0.2,color='g',align='center')
+	ax.bar(x+0.2,ac3,width=0.2,color='r',align='center')
+
+
+	plt.savegif('baractive.png')
+
 
 
 def tolAcc(y,pred):
@@ -29,25 +65,7 @@ def tolAcc(y,pred):
 	meanEr = sum(errors)/len(errors)
 	return(score*100)
 
-def deleteClass(X,y,num,c):
-	"""Delete 'num' samples from class='class' in StudentLife dataset stress reports
-	"""
-	
-	twoIndex=np.array([i for i in range(len(y)) if y[i]==c])
-	np.random.shuffle(twoIndex)
 
-	if num >= 0.7*len(twoIndex):
-		print('Number of examples requested for delete too many. Exiting...')
-		exit()
-
-	delIndex=twoIndex[0:num]
-
-	X=np.delete(X,delIndex,0)
-	y=np.delete(y,delIndex,0)
-
-	print(X.shape,y.shape)
-
-	return(X,y)
 
 
 def activeLabeling(y1,y2):
@@ -61,9 +79,21 @@ def activeLabeling(y1,y2):
 	# examples they 'agreed' on in the Tolerance manner
 	correct = occurences[0]+occurences[1]
 	percent = float(correct)*100 / len(y)
-	print(percent)
+	print('They agree: %s %%' % percent)
 
+def deleteClass(X, y, num, c):
+    """Delete 'num' samples from class=c in StudentLife dataset stress reports
+    """
 
+    twoIndex = np.array([i for i in range(len(y)) if y[i] == c])
+    np.random.shuffle(twoIndex)
+
+    delIndex = twoIndex[0:num]
+
+    X = np.delete(X, delIndex, 0)
+    y = np.delete(y, delIndex, 0)
+
+    return(X, y)
 
 def main():
 	print('-----------------------------')
@@ -72,16 +102,17 @@ def main():
 	
 	X = np.load('X.npy')
 	Y = np.load('Y.npy')
-	
+	print(Counter(Y))
 	# fixes errors with Nan data
 	X = preprocessing.Imputer().fit_transform(X)
 	print(X.shape,Y.shape)
 
-	#Deleting examples of majority class to enforce balance
-	X,Y = deleteClass(X,Y,300,2)
-	#X,Y = deleteClass(X,Y,40,1)
+	adsn = ADASYN(ratio=0.7)
+	X,Y = adsn.fit_transform(X,Y)
+	print(Counter(Y))
 
-
+	X,Y = deleteClass(X,Y,100,2)
+	print(Counter(Y))
 	
 	# The feature division is not clear by their column number,
 	# It was attempted intuitively while cross-checking with the 
@@ -98,28 +129,91 @@ def main():
 	#print(clasOneData.shape, clasTwoData.shape)
 
 	#assisning weights to penalize majority class over minority
-	class_weights={0 : 1, 1 : 0.2 , 2 : 0.1 , 3 : 0.2, 4 :1}
-	rfr1= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
-	rfr2= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
-	rfr3= RandomForestClassifier(n_estimators=300,class_weight=class_weights,n_jobs=-1)
+	#class_weights={0 : 1, 1 : 0.2 , 2 : 0.1 , 3 : 0.2, 4 :1}
+	rfr1= RandomForestClassifier(n_estimators=300,class_weight='auto',n_jobs=-1)
+	rfr2= RandomForestClassifier(n_estimators=300,class_weight='auto',n_jobs=-1)
+	rfr3= RandomForestClassifier(n_estimators=300,class_weight='auto',n_jobs=-1)
 
-	n_samples = 500
-	rfr1.fit(clasOneData[1:n_samples],Y[1:n_samples])
-	rfr2.fit(clasTwoData[1:n_samples],Y[1:n_samples])	
-	rfr3.fit(X[1:n_samples],Y[1:n_samples])
+	n_samples = 700
+	tolac1 = []
+	tolac2 = []
+	tolac3 = []
 
-	pred1 = rfr1.predict(clasOneData[n_samples:-1])
-	print(tolAcc(Y[n_samples:-1],pred1))
+	ranges=['33','25','20']
+	df =[]
+	for i in [3,4,5,10]:
+		skf = StratifiedKFold(Y,n_folds=i,shuffle=True)
+		for test,train in skf:
+			print(len(train),len(test), float(len(train))/len(test))
+			rfr1.fit(clasOneData[train],Y[train])
+			rfr2.fit(clasTwoData[train],Y[train])	
+			rfr3.fit(X[train],Y[train])
+			
+			pred1 = rfr1.predict(clasOneData[test])
+			tolac1.append(tolAcc(Y[test],pred1))
+			print('Tolerance accuracy 1: %s' % tolAcc(Y[test],pred1))
 
-	pred2 = rfr2.predict(clasTwoData[n_samples:-1])
-	print(tolAcc(Y[n_samples:-1],pred2))
+			pred2 = rfr2.predict(clasTwoData[test])
+			tolac2.append(tolAcc(Y[test],pred2))
+			print('Tolerance accuracy 2: %s' % tolAcc(Y[test],pred2))
 
-	pred3 = rfr3.predict(X[n_samples:-1])
-	print(tolAcc(Y[n_samples:-1],pred3))
+			pred3 = rfr3.predict(X[test])
+			tolac3.append(tolAcc(Y[test],pred3))
+			print('Combined: %s' % tolAcc(Y[test],pred3))
 
-	pred1 = pred1.astype(np.int64)
-	pred2 = pred2.astype(np.int64)
-	activeLabeling(pred1,pred2)
+			pred1 = pred1.astype(np.int64)
+			pred2 = pred2.astype(np.int64)
+			activeLabeling(pred1,pred2)
+
+		nac1 = np.asarray(tolac1)
+		nac2 = np.asarray(tolac2)
+		nac3 = np.asarray(tolac3)
+
+		#together = np.concatenate((nac1,nac2,nac3),axis=0)
+
+		df.append(pd.DataFrame({
+			'Accuracy': nac1,
+			#'Class' : pd.Categorical([1 for i in range(0,len(nac1))])
+			}))
+
+		df.append(pd.DataFrame({
+			'Accuracy': nac2,
+			#'Class' : pd.Categorical([2 for i in range(0,len(nac2))])
+			}))
+
+		df.append(pd.DataFrame({
+			'Accuracy': nac3,
+			#'Class' : pd.Categorical(['combined' for i in range(0,len(nac2))])
+			}))
+
+		del tolac1[:]
+		del tolac2[:]
+		del tolac3[:]
+
+	#print(df)
+	df1 = pd.concat(df)
+	print(df1)
+	cat1 = [1 for j in range(0,len(nac1))]
+	cat2 = [2 for j in range(0,len(nac2))]
+	cat3 =['combined' for j in range(0,len(nac3))]
+	catego = cat1 + cat2 + cat3
+	print(catego)
+	percent = ['33' for i in range(0,3*3)] + ['25' for i in range(0,3*4)] +['20' for i in range(0,3*5)] +['10' for i in range(0,3*10)]
+	cats = [1,1,1,2,2,2,'combined','combined','combined',1,1,1,1,2,2,2,2,'combined','combined','combined','combined',1,1,1,1,1,2,2,2,2,2,'combined','combined','combined','combined','combined',1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,'combined','combined','combined','combined','combined','combined','combined','combined','combined','combined']
+	#per = pd.Categorical.from_array(['33','33','33','25','25','25','25','20','20','20','20','20'])
+	df1['Category'] = cats
+	df1['percent'] = percent
+	print(df1)
+
+	sns.set_style('whitegrid')
+	ax = sns.barplot(x='percent', y='Accuracy',hue='Category',data=df1)
+	plt.legend(loc='upper right')
+	fig = ax.get_figure()
+	#fig.set_size_inches(15,9)
+	fig.savefig('activelearn1.png')
+
+
+
 
 
 if __name__ == '__main__':
