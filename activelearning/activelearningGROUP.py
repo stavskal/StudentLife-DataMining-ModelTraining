@@ -73,13 +73,17 @@ def activeLabeling(y1,y2):
 	occurences = np.bincount(y)
 
 	#Number of predictions in each class
-	print(np.bincount(y1),np.bincount(y2))
+	#print(np.bincount(y1),np.bincount(y2))
 
 	# Number of zeros and ones in occurences is the number of
 	# examples they 'agreed' on in the Tolerance manner
 	correct = occurences[0]+occurences[1]
 	percent = float(correct)*100 / len(y)
 	print('They agree: %s %%' % percent)
+	correct1 = occurences[0]
+	percent1 = float(correct1)*100 / len(y)
+	print('Or do they? %s' % percent1)
+	return(percent)
 
 def deleteClass(X, y, num, c):
     """Delete 'num' samples from class=c in StudentLife dataset stress reports
@@ -138,33 +142,47 @@ def main():
 	tolac1 = []
 	tolac2 = []
 	tolac3 = []
+	rate =[]
 
 	ranges=['33','25','20']
 	df =[]
 	for i in [3,4,5,10]:
 		skf = StratifiedKFold(Y,n_folds=i,shuffle=True)
 		for test,train in skf:
-			print(len(train),len(test), float(len(train))/len(test))
+			#print(len(train),len(test), float(len(train))/len(test))
 			rfr1.fit(clasOneData[train],Y[train])
 			rfr2.fit(clasTwoData[train],Y[train])	
 			rfr3.fit(X[train],Y[train])
 			
 			pred1 = rfr1.predict(clasOneData[test])
 			tolac1.append(tolAcc(Y[test],pred1))
-			print('Tolerance accuracy 1: %s' % tolAcc(Y[test],pred1))
+			#print('Tolerance accuracy 1: %s' % tolAcc(Y[test],pred1))
 
 			pred2 = rfr2.predict(clasTwoData[test])
 			tolac2.append(tolAcc(Y[test],pred2))
-			print('Tolerance accuracy 2: %s' % tolAcc(Y[test],pred2))
+		#	print('Tolerance accuracy 2: %s' % tolAcc(Y[test],pred2))
 
 			pred3 = rfr3.predict(X[test])
 			tolac3.append(tolAcc(Y[test],pred3))
-			print('Combined: %s' % tolAcc(Y[test],pred3))
+			#print('Combined: %s' % tolAcc(Y[test],pred3))
 
 			pred1 = pred1.astype(np.int64)
 			pred2 = pred2.astype(np.int64)
-			activeLabeling(pred1,pred2)
+			aggreement_rate = activeLabeling(pred1,pred2)
+			rate.append(aggreement_rate)
+		#print(rfr3.feature_importances_)
+	print(rate[0:3])
+	print('Mean is : %s' % np.mean(rate[0:3]))
+	print(rate[3:6])
+	print('Mean is : %s' % np.mean(rate[3:7]))
+	print(rate[9:12])
+	print('Mean is : %s' % np.mean(rate[7:12]))
+	print(rate[12:16])
+	print('Mean is : %s' % np.mean(rate[12:-1]))
 
+
+
+"""
 		nac1 = np.asarray(tolac1)
 		nac2 = np.asarray(tolac2)
 		nac3 = np.asarray(tolac3)
@@ -211,7 +229,7 @@ def main():
 	fig = ax.get_figure()
 	#fig.set_size_inches(15,9)
 	fig.savefig('activelearn1.png')
-
+"""
 
 
 
