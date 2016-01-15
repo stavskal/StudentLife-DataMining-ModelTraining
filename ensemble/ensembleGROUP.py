@@ -43,43 +43,42 @@ def tolAcc(y,pred):
 	print(truescore*100)
 	return(score*100)
 
-def fiPlot(rf):
-	""" Bar plot of feature importances of RF
-	"""
-	fi = rf.feature_importances_
-	print(len(fi))
-	fi = 100* (fi/fi.max())
-	sorted_idx = np.argsort(fi)
-	pos = np.arange(len(fi))
-	print(pos)
-	plt.figure()
-	plt.barh(pos,fi[sorted_idx],align='center')
-	plt.savefig('featureImporances.png')
+
+def deleteClass(X, y, num, c):
+    """Delete 'num' samples from class=c in StudentLife dataset stress reports
+    """
+
+    twoIndex = np.array([i for i in range(len(y)) if y[i] == c])
+    np.random.shuffle(twoIndex)
+
+    delIndex = twoIndex[0:num]
+
+    X = np.delete(X, delIndex, 0)
+    y = np.delete(y, delIndex, 0)
+
+    return(X, y)
+
+
 
 
 
 def main(argv):
 	#Change to parent directory to load data
-	os.chdir(os.path.pardir)
-	X=np.load('numdata/withgps/epochFeats.npy')
-	Y=np.load('numdata/withgps/epochLabels.npy')
-	labels= np.load('numdata/withgps/LOO.npy')
+	#os.chdir(os.path.pardir)
+	X=np.load('data/X51.npy')
+	Y=np.load('data/y51.npy')
+	labels= np.load('data/LOO.npy')
 
 	#fixes errors with Nan data
-	X = preprocessing.Imputer().fit_transform(X)
+	X= preprocessing.Imputer().fit_transform(X)
 
-	#BABY IM WORTH It NANANANAN
-	adsn = ADASYN(ratio=0.7)
+	# Recursive oversampling and undersampling
+	adsn = ADASYN(imb_threshold=0.5,ratio=0.7)
 	X,Y = adsn.fit_transform(X,Y)
-	print(X.shape,Y.shape)
+	X,Y = adsn.fit_transform(X,Y)
+	X,Y = deleteClass(X,Y,100,2)
 
-	for i in range(0,Y.shape[0]):
-		if Y[i]==5 or Y[i]==4:
-			Y[i]=0
-		elif Y[i]==1:
-			continue
-		else:
-			Y[i]=2
+	print(Counter(Y))
 
 
 	# Ensemble Random Forest Regressor stacked with Random Forest Classifier
@@ -91,25 +90,13 @@ def main(argv):
 	
 		print(X.shape,Y.shape)
 
-		# separating features into categories for Ensemble Training
-		activityData = X[:,0:3 ]
-		screenData = X[:,3:14]
-		conversationData = X[:,14:20 ]
-		colocationData = X[:,20:26]
-		audioData = X[:,26:X.shape[1]]
-
-		skf = StratifiedKFold(Y,n_folds=3)
-		kf = KFold(X.shape[0],shuffle=True)
-		for traini, testi in kf:
+		n_folds=3
+		skf = StratifiedKFold(Y,n_folds=n_folds)
+		kf = KFold(X.shape[0],n_folds=n_folds,shuffle=True)
+		for traini, testi in skf:
 			print(len(traini),len(testi))
-			#np.random.shuffle(traini)
-			# separating train data to 2 subsets: 
-			# 1) Train RFR(60% of data)
-			# 2) Get RF outputs with which train RF classifier (40% of data)
-			#train_index = traini[0: int(0.6*len(traini))]
-			#train_index2 =  traini[int(0.6*len(traini)):len(traini)]
 
-			class_weights={0 : 1, 1 : 0.4 , 2 : 0.1 , 3 : 0.4, 4 :1}
+			# Although data is oversampled, still a small imbalance is present
 			rfr= RandomForestClassifier(n_estimators=300,class_weight='auto',n_jobs=-1)
 
 			rfr.fit(X[traini],Y[traini])
@@ -119,9 +106,8 @@ def main(argv):
 			tempacc = tolAcc(Y[testi],pred)
 			print(tempacc)
 			totalacc += tempacc
-			#print(rfr.feature_importances_)
 
-		print('LOSO TP accuracy: {0}'.format(totalacc/3))
+		print('LOSO TP accuracy: {0}'.format(totalacc/n_folds))
 
 
 
