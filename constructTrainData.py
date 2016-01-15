@@ -57,7 +57,7 @@ def main():
 		accuracies =[]
 		acc=0
 		maxminAcc =[]
-		Xbig = np.zeros([1,34])	
+		Xbig = np.zeros([1,51])	
 		Ybig = np.zeros([1])
 		labels=[]
 		labels.append(19)
@@ -85,9 +85,7 @@ def main():
 			Y = np.zeros(len(records))
 			X = np.array(records)
 
-			# X is shuffled twice to ensure that the report sequence is close to random
-			#np.random.shuffle(X)
-			#np.random.shuffle(X)
+	
 
 
 			for i in range(0,len(records)):
@@ -105,29 +103,47 @@ def main():
 				Y[i] = X[i][1]
 
 			
-
 			#concatenating features in one array 
-			Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList),np.array(audioList),np.array(gpsList)),axis=1)
+			print(np.array(activityList).shape)
+			print(np.array(colocationList).shape)
+			print(np.array(conversationList).shape)
+			print(np.array(ScreenList).shape)
+			print(np.array(audioList).shape)
+			#print(gpsList)
+			temp_gps = np.reshape(np.array(gpsList,dtype=np.float64), (len(np.array(gpsList)),1))
+			print(temp_gps.shape, temp_gps.dtype)
+			Xtt = np.concatenate((np.array(activityList),np.array(ScreenList),np.array(conversationList),np.array(colocationList),np.array(audioList),temp_gps),axis=1)
 			print(Xtt.shape)
 
 			#initiating and training forest, n_jobs indicates threads, -1 means all available
 			# while the test student is not reached, training data are merged into one big matrix
 			Xbig = np.concatenate((Xbig,Xtt),axis=0)
 			Ybig = np.concatenate((Ybig,Y),axis=0)
+			print(Xbig.shape)
 			#print(Xbig.shape[0],len(labels))
 			#print(Xbig.shape[0],Ybig.shape[0],len(labels))
+			del ScreenList[:]
+			del colocationList[:]
+			del conversationList[:]
+			del activityList[:]
+			del audioList[:]
+			del gpsList[:]
+
+
 
 			if testUser!=loso:
 				#Xbig = np.concatenate((Xbig,Xtt),axis=0)
 				#Ybig = np.concatenate((Ybig,Y),axis=0)
 				
 				Xbig = Xbig.astype(np.float64)
-				
+				print(Xbig.dtype)
+				#np.save('tempX.npy', Xbig)
+				continue
 				
 
 			# when loso, tests are run
 			elif testUser==loso:
-				Xbig = preprocessing.scale(Xbig)
+				#Xbig = preprocessing.scale(Xbig)
 				np.save('numdata/withgps/epochFeats.npy',Xbig)
 				np.save('numdata/withgps/epochLabels.npy',Ybig)
 				np.save('numdata/withgps/LOO.npy',np.array(labels))
