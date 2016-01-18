@@ -8,7 +8,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.decomposition import PCA
 from sklearn import preprocessing
 from sklearn.calibration import CalibratedClassifierCV
-
+from sklearn.utils import shuffle
 import xgboost as xgb
 import matplotlib.pyplot as plt
 import time
@@ -41,8 +41,9 @@ def tolAcc(y,pred):
 	y = y.astype(np.int64)
 	pred = pred.astype(np.int64)
 	#Number of predictions in each class
-	#print('              Ground Truth ------------ Prediction')
-	#print(np.bincount(y),np.bincount(pred))
+	print('              Ground Truth ------------ Prediction')
+	print(np.bincount(y),np.bincount(pred))
+	print(truescore*100)
 	return(score*100,truescore*100)
 
 
@@ -70,9 +71,9 @@ def main(argv):
 	X=np.load('data/X51.npy')
 	Y=np.load('data/y51.npy')
 	labels= np.load('data/LOO.npy')
-
+	print(X.shape)
 	#fixes errors with Nan data
-	X= preprocessing.Imputer().fit_transform(X)
+#	X= preprocessing.Imputer().fit_transform(X)
 
 	# Recursive oversampling and undersampling
 	#adsn = ADASYN(imb_threshold=0.5,ratio=0.7)
@@ -81,22 +82,47 @@ def main(argv):
 	#X,Y = deleteClass(X,Y,100,2)
 	
 	#Grouping 5 classes to 3
-	for i in range(0,Y.shape[0]):
+	"""for i in range(0,Y.shape[0]):
 		if Y[i]==0 or Y[i]==1:
 			Y[i]==0
 		elif Y[i]==2:
 			Y[i]=1
 		else:
 			Y[i]=2
+"""
+	print(Counter(Y))
 
-	# Targeted oversampling
-	adsn = ADASYN(imb_threshold=0.4,ratio=1)
+	# Synthetic data is only to be used during training to
+	# enhance recall of minority classes. New data are appended
+	# as first rows of X,y
+
+	size_b = X.shape[0]
+	adsn = ADASYN(imb_threshold=0.5,ratio=0.7)
 	X,Y = adsn.fit_transform(X,Y)
-	adsn = ADASYN(imb_threshold=0.41,ratio=0.7)
-	X,Y = adsn.fit_transform(X,Y)
+	size_a = X.shape[0]
+	generated_samp = size_a - size_b
+
+	newX = X[1:generated_samp]
+	newY = Y[1:generated_samp]
+
+	#Shuffling original data to ensure no time dependence
+	realX,realY = shuffle(X[generated_samp:-1],Y[generated_samp:-1], random_state=0)
+	realX,realY = shuffle(realX,realY, random_state=15)
+
+	print('--------------')	
+	# appending real data after generated so that test set will not contain synthetic data
+	allX = np.concatenate((newX,realX),axis=0)
+	allY = np.concatenate((newY,realY),axis=0)
+	
+
+	X, Y = deleteClass(allX,allY,200,2)
+	print(X.shape, Y.shape)
+
+	# creating training set with synthetic data, test set only real data
+	train = [i for i in range(0,int(0.7*X.shape[0]))]
+	test = [i for i in range(int(0.7*X.shape[0]), X.shape[0])]
 	print(Counter(Y))
 	
-	# Ensemble Random Forest Regressor stacked with Random Forest Classifier
 	if sys.argv[1]=='-ensemble':
 		RF  = []
 		outputRF = []
@@ -106,7 +132,7 @@ def main(argv):
 		totalXGB=0
 
 		#Tests with all features / most important
-		feats =[0,1,2,3,4,5,6,7,13,16,22,23,24,25,26,27,29,30,31,32,33,35,38,39,40,41,44,46,47,50]
+		#feats =[0,1,2,3,4,5,6,7,13,16,22,23,24,25,26,27,29,30,31,32,33,35,38,39,40,41,44,46,47,50]
 		#X = X[:,feats]
 		print(X.shape,Y.shape)
 
@@ -139,31 +165,36 @@ def main(argv):
 
 	elif sys.argv[1]=='-cali':
 		# These parameters have been computed with RandomizedSearchCV
-		rf_c= RandomForestClassifier(n_estimators=300,bootstrap=False,class_weight='auto',n_jobs=-1,criterion='entropy',max_features=10,min_samples_split=1)
-		gbm = xgb.XGBClassifier(n_estimators=300,learning_rate=0.2,colsample_bytree=0.5, objective='multi:softmax',max_depth=10,gamma=0.001)
-		Xtrain, Xtest, ytrain, ytest = train_test_split(X,Y,test_size=0.3)
+		rf_c= RandomForestClassifier(n_estimators=300,bootstrap=False,class_weight='auto',n_jobs=-1,criterion='entropy',max_features=15,min_samples_split=1)
+		gbm = xgb.XGBClassifier(n_estimators=300,learning_rate=0.2,colsample_bytree=0.5, objective='multi:softmax',max_depth=15,gamma=0.001)
 		
+		#Non-calibrated random forest
+		rf_c.fit(X[train],Y[train])
+		pred = rf_c.predict(X[test])
+		tolac,trueacc =tolAcc(Y[test],pred)
+		print(tolac)
+
+
 		# Using isotonic calibration with 3-fold cv to improve results
 		# Both on RF and XGBoost
-		cc = CalibratedClassifierCV(rf_c,method='isotonic',cv=3)
-		cc.fit(Xtrain,ytrain)
-		pred = cc.predict(Xtest)
-		print(precision_recall_fscore_support(ytest,pred))
-		tolac,trueacc =tolAcc(ytest,pred)
+		rf_c1= RandomForestClassifier(n_estimators=300,bootstrap=False,class_weight='auto',n_jobs=-1,criterion='entropy',max_features=15,min_samples_split=1)
+
+		cc = CalibratedClassifierCV(rf_c1,method='isotonic',cv=3)
+		cc.fit(X[train],Y[train])
+		pred = cc.predict(X[test])
+		tolac,trueacc =tolAcc(Y[test],pred)
 		print(tolac)
 
 		cc = CalibratedClassifierCV(gbm,method='isotonic',cv=3)
-		cc.fit(Xtrain,ytrain)
-		pred = cc.predict(Xtest)
-		print(precision_recall_fscore_support(ytest,pred))
-		tolac,trueacc =tolAcc(ytest,pred)
+		cc.fit(X[train],Y[train])
+		pred = cc.predict(X[test])
+		tolac,trueacc =tolAcc(Y[test],pred)
 		print(tolac)
 
 		#Comparing to not-calibrated xgboost
-		gbm.fit(Xtrain,ytrain)
-		pred = gbm.predict(Xtest)
-		print(precision_recall_fscore_support(ytest,pred))
-		tolac,trueacc =tolAcc(ytest,pred)
+		gbm.fit(X[train],Y[train])
+		pred = gbm.predict(X[test])
+		tolac,trueacc =tolAcc(Y[test],pred)
 		print(tolac)
 
 
