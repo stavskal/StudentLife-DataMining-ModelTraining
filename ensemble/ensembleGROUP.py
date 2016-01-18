@@ -80,7 +80,7 @@ def main(argv):
 	#X,Y = adsn.fit_transform(X,Y)
 	#X,Y = deleteClass(X,Y,100,2)
 	
-
+	#Grouping 5 classes to 3
 	for i in range(0,Y.shape[0]):
 		if Y[i]==0 or Y[i]==1:
 			Y[i]==0
@@ -89,6 +89,7 @@ def main(argv):
 		else:
 			Y[i]=2
 
+	# Targeted oversampling
 	adsn = ADASYN(imb_threshold=0.4,ratio=1)
 	X,Y = adsn.fit_transform(X,Y)
 	adsn = ADASYN(imb_threshold=0.41,ratio=0.7)
@@ -104,6 +105,7 @@ def main(argv):
 		totalRF=0
 		totalXGB=0
 
+		#Tests with all features / most important
 		feats =[0,1,2,3,4,5,6,7,13,16,22,23,24,25,26,27,29,30,31,32,33,35,38,39,40,41,44,46,47,50]
 		#X = X[:,feats]
 		print(X.shape,Y.shape)
@@ -141,7 +143,8 @@ def main(argv):
 		gbm = xgb.XGBClassifier(n_estimators=300,learning_rate=0.2,colsample_bytree=0.5, objective='multi:softmax',max_depth=10,gamma=0.001)
 		Xtrain, Xtest, ytrain, ytest = train_test_split(X,Y,test_size=0.3)
 		
-		#Using isotonic calibration with 3-fold cv to improve results
+		# Using isotonic calibration with 3-fold cv to improve results
+		# Both on RF and XGBoost
 		cc = CalibratedClassifierCV(rf_c,method='isotonic',cv=3)
 		cc.fit(Xtrain,ytrain)
 		pred = cc.predict(Xtest)
