@@ -1,15 +1,115 @@
 import matplotlib.pyplot as pyp
 import numpy as np
 import seaborn as sns
+import pandas as pd
 import psycopg2,random
 import datetime as dt
 from unbalanced_dataset import UnderSampler
 from sklearn.cluster import KMeans
+uids1=['u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49','u16','u19']
 
 #from processingFunctions import *
 
+
+#connecting to database
+try:
+	con = psycopg2.connect(database='dataset', user='tabrianos')
+	cur = con.cursor()
+except psycopg2.DatabaseError as err:
+	print('Error %s' % err)
+	exit()
+
+rec=[]
+for u in uids1:
+	user = u+'sleep'
+	cur.execute('SELECT hour,rate FROM {0}'.format(user) )
+	rec += cur.fetchall()
+print(rec,len(rec))
+sleep = np.array(rec)
+print(sleep)
+
+
+dfsleep = pd.DataFrame(sleep)
+
+print(dfsleep.head())
+
+ax = sns.boxplot(x=1,y=0,data=dfsleep)
+x=[0,1,2,3]
+time1 = ['Very good','Fairly good', 'Fairly bad', 'Very bad']
+pyp.xticks(x, time1)
+pyp.ylabel('Hours slept')
+pyp.xlabel('Rate of sleep')
+fig = ax.get_figure()
+fig.savefig('sleep_rate_hour.png')
+"""
+
 sns.set_style('darkgrid')
-sns.set(color_codes=True)
+fi = np.load('featimpor.npy')
+x = [i for i in range(0,len(fi))]
+ax = sns.barplot(x=x,y=fi)
+fig = ax.get_figure()
+fig.savefig('featimporta1.png')
+
+tse = [87.1432588052,85.3914820793,83.3015085992,81.8932947942]
+x=[0,1,2,3]
+time1 = ['33','25','20','10']
+pyp.xticks(x, time1)
+pyp.title('Agreement of separate classifiers')
+pyp.ylabel('Percentage of agreement')
+pyp.xlabel('Portion of labeled data used')
+ax = sns.tsplot(data=tse)
+fig = ax.get_figure()	
+fig.savefig('tsagree1.png')
+
+#sns.set(color_codes=True)
+fi=[0.04262531,  0.03901671,  0.04068426,  0.01825495,  0.01789869,  0.02558647,0.01785529 , 0.01886639,  0.02596094 , 0.02014726 , 0.01935518 , 0.01862711, 0.01893412 , 0.0184053,   0.03011386,  0.03261616,  0.03354703 , 0.03181524,0.03021566 , 0.03009366 , 0.03474774 , 0.03260319 , 0.03663044 , 0.03213318,0.03419763 , 0.02962987 , 0.03523792 , 0.03469404 , 0.03965231 , 0.04484659,0.0456531 ,  0.03584487 , 0.03350954]
+
+
+
+x=['Feeling Great','Feeling Good','A little stressed','Definitely Stressed','Stressed Out']
+y=[173,439,492,349,297]
+
+ax = sns.barplot(x=x,y=y)
+pyp.ylim(0,600)
+pyp.title('ADASYN Oversampling')
+fig = ax.get_figure()
+fig.savefig('LabelDistoverAfter.png')
+exit()
+
+y=np.array([4,30,32.9,21.3,10])
+x=['Activity','Screen','Conversation','Co-Location','Audio']
+ax = sns.kdeplot(y)
+#pyp.ylim(0,592)
+pyp.title('Feature importance for each Category of feats.')
+pyp.ylabel('No. of Students')
+fig = ax.get_figure()
+fig.savefig('featimp1.png')
+exit()
+
+y=[19.4,19.1,20.4,20.3,20.5]
+x=['Activity','Screen','Conversation','Co-Location','Audio']
+ax = sns.barplot(x=x,y=y)
+#pyp.ylim(0,592)
+pyp.title('Feature importance for each Category of feats.')
+pyp.ylabel('No. of Students')
+fig = ax.get_figure()
+fig.savefig('featimp1.png')
+exit()
+
+
+
+y=[2,2,7,4,1]
+x=['50-60','60-70','70-80','80-90','>90']
+ax = sns.barplot(x=x,y=y)
+#pyp.ylim(0,592)
+pyp.title('Leave One Student Out accuracy distribution')
+pyp.xlabel('Tolerance Accuracy (%)')
+pyp.ylabel('No. of Students')
+fig = ax.get_figure()
+fig.savefig('LOSOaccDist.png')
+exit()
+
+
 
 x=['Feeling Great','Feeling Good','A little stressed','Definitely Stressed','Stressed Out']
 y=[62,286,292,212,156]
@@ -37,7 +137,6 @@ pyp.savefig('gpsplot.png')
 
 
 
-"""
 #heat = np.array([[62.06,63.34, 60.70,60.8 ,54],[60.44,61.14, 55.38, 63.99, 60.05],[67.1,60.6, 60.54,57.52,58.14]])
 #print(heat.shape)
 uids=['u16','u19','u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49','Mean']
