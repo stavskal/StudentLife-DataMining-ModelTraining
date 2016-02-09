@@ -75,26 +75,26 @@ def actEpochFeats(cur,uid,timestamp):
 				movement += 1
 	return(movement)
 
+def convEpochFeats(cur,uid,timestamp):
+	"""Returns total duration and number of conversations
+	   calculated in three epochs (day,evening,night), 6 features total"""
 
-def darknessDur(cur,uid,timestamp):
-	totalDur = 0
-	uidS = uid+'dark'
-	#Getting data from database within day period
-	cur.execute('SELECT * FROM {0} WHERE timeStart>={1} AND timeStop<={2}'.format(uidS, timestamp-86400, timestamp) )
+	cur.execute('SELECT * FROM {0} WHERE start_timestamp >= {1} AND end_timestamp<= {2}'.format(uid+'con',timestamp-86400,timestamp))
 	records = cur.fetchall()
+	totalConvsNight=0
+	totalConvTimeN=0
 
-	#timeEpochs holds tuples of timestamps and their according epochs
 	tStart = [item[0] for item in records]
 	tStop = [item[1] for item in records]
+
 	timeEpochs = epochCalc(tStart)
 	timeEpochs1 = epochCalc(tStop)
 
-
 	for i in range(0,len(records)):
-		if timeEpochs[i][0]=='night' or timeEpochs1[i][0]=='night':
-			totalDur += records[i][1] - records[i][0]
-
-	return np.absolute(totalDur)	
+		if timeEpochs[i][0] in ['evening']:
+			totalConvsNight += 1 
+			totalConvTimeN += records[i][1]-records[i][0]
+	return(totalConvsNight)
 
 try:
 	con = psycopg2.connect(database='dataset', user='tabrianos')
@@ -106,46 +106,48 @@ except psycopg2.DatabaseError as err:
 rec=[]
 noiseList=[]
 moveList=[]
+convList =[]
 darkList=[]
 for u in uids1:
 	user = u+'sleep'
 	cur.execute('SELECT hour,rate,time_stamp FROM {0}'.format(user) )
 	temp = cur.fetchall()
 	for lab in temp:
-		noiseList.append(audioEpochFeats(cur,u,lab[2]))
-		moveList.append(actEpochFeats(cur,u,lab[2]))
+		#noiseList.append(audioEpochFeats(cur,u,lab[2]))
+		#moveList.append(actEpochFeats(cur,u,lab[2]))
+		convList.append(convEpochFeats(cur,u,lab[2]))
 		#darkList.append(darknessDur(cur,u,lab[2]))
 	cur.execute('SELECT hour,rate FROM {0}'.format(user) )
 	rec += cur.fetchall()
 
 
-print(len(noiseList),len(rec))
+#print(len(noiseList),len(rec))
 #noise = np.zeros((len(noiseList,1)))
 
 sleep = np.array(rec)
 print(sleep)
-m = np.mean(moveList)
-for i in range(0,len(moveList)):
-	if moveList[i]>1000:
-		moveList[i] = m
+#m = np.mean(moveList)
+#for i in range(0,len(moveList)):
+#	if moveList[i]>1000:
+	#	moveList[i] = m
 
 
-last = np.column_stack((rec,noiseList,moveList))
+last = np.column_stack((rec,convList))
 print('this is my list bitch')
 print(last)
 
 
 dfsleep = pd.DataFrame(last)
-dfsleep.to_csv('sleep.csv', sep='\t')
+dfsleep.to_csv('sleepconv.csv', sep='\t')
 
 print(dfsleep.head(10))
-ax = sns.factorplot(x=0,y=3,data=dfsleep)
+ax = sns.factorplot(x=1,y=2,data=dfsleep,color='red')
 x=[0,1,2,3]
 time1 = ['Very good','Fairly good', 'Fairly bad', 'Very bad']
 pyp.xticks(x, time1)
-pyp.ylabel('Movement during night')
+pyp.ylabel('Conversations duration during evening')
 pyp.xlabel('Rate of sleep')
-ax.savefig('sleep_hour_move.png')
+ax.savefig('sleep_rate_convevening.png')
 #fig = ax.get_figure()
 #fig.savefig('sleep_rate_move.png')
 
