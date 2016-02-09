@@ -6,12 +6,96 @@ import psycopg2,random
 import datetime as dt
 from unbalanced_dataset import UnderSampler
 from sklearn.cluster import KMeans
+import datetime
 uids1=['u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49','u16','u19']
+uids2=['u44']
+
+def unixTimeConv(timestamps):
+	""" converts unix timestamp to human readable date 
+		(e.g '1234567890' -> '2009 02 14  00 31 30')
+	"""
+	splitTimes = np.zeros((len(timestamps), 7),dtype='float32')
+	i=0
+	#print(timestamps)
+	for time in timestamps:
+		newTime = str(datetime.datetime.fromtimestamp(int(time)))
+		yearDate,timeT = newTime.split(' ')
+		year,month,day = str(yearDate).split('-')
+		hour,minutes,sec = timeT.split(':')
+		splitTimes[i,:] = (year,month,day,hour,minutes,sec,time)
+		i += 1
+	return(splitTimes)
 
 #from processingFunctions import *
+def epochCalc(timestamps):
+	""" converts timestamp to epoch (day,evening,night) 
+		and returns (epoch,time) tuple
+	"""
+	splitTimes = unixTimeConv(timestamps)
+	epochTimes = []
+	for i in range(0,len(splitTimes)):
+		hour=int(splitTimes[i,3])
+		if hour >10 and hour <=18:
+			epoch='day'
+		elif hour >0 and hour<=10:
+			epoch='night'
+		else:
+			epoch='evening'
+		epochTimes.append((epoch,splitTimes[i,6]))
+	return epochTimes
 
+def audioEpochFeats(cur,uid,timestamp):
+	uidA = uid +'audio'	
+	noise = 0
+	cur.execute('SELECT time_stamp, audio FROM {0} WHERE time_stamp >= {1} AND time_stamp<= {2}'.format(uidA,timestamp-86400,timestamp))
+	records = cur.fetchall()
 
+	tStart = [item[0] for item in records if item[1]!=3]
+	timeEpochs = (epochCalc(tStart)) 
+
+	for i in range(0,len(records)):
+		if timeEpochs[i][0]=='evening' or timeEpochs[i][0]=='night':
+			if records[i][1]==2:
+				noise += 1
+
+	return(noise)
 #connecting to database
+def actEpochFeats(cur,uid,timestamp):
+	uidA = uid +'act'	
+	movement = 0
+	cur.execute('SELECT time_stamp, activity FROM {0} WHERE time_stamp >= {1} AND time_stamp<= {2}'.format(uidA,timestamp-86400,timestamp))
+	records = cur.fetchall()
+
+	tStart = [item[0] for item in records]
+	timeEpochs = (epochCalc(tStart)) 
+
+	for i in range(0,len(records)):
+		if timeEpochs[i][0]=='night':
+			if records[i][1]==1 or records[i][1]==2:
+				movement += 1
+	return(movement)
+
+
+def darknessDur(cur,uid,timestamp):
+	totalDur = 0
+	uidS = uid+'dark'
+	#Getting data from database within day period
+	cur.execute('SELECT * FROM {0} WHERE timeStart>={1} AND timeStop<={2}'.format(uidS, timestamp-86400, timestamp) )
+	records = cur.fetchall()
+
+	#timeEpochs holds tuples of timestamps and their according epochs
+	tStart = [item[0] for item in records]
+	tStop = [item[1] for item in records]
+	timeEpochs = epochCalc(tStart)
+	timeEpochs1 = epochCalc(tStop)
+
+
+	for i in range(0,len(records)):
+		if timeEpochs[i][0]=='night' or timeEpochs1[i][0]=='night':
+			totalDur += records[i][1] - records[i][0]
+
+	return np.absolute(totalDur)	
+
 try:
 	con = psycopg2.connect(database='dataset', user='tabrianos')
 	cur = con.cursor()
@@ -20,18 +104,52 @@ except psycopg2.DatabaseError as err:
 	exit()
 
 rec=[]
+noiseList=[]
+moveList=[]
+darkList=[]
 for u in uids1:
 	user = u+'sleep'
+	cur.execute('SELECT hour,rate,time_stamp FROM {0}'.format(user) )
+	temp = cur.fetchall()
+	for lab in temp:
+		noiseList.append(audioEpochFeats(cur,u,lab[2]))
+		moveList.append(actEpochFeats(cur,u,lab[2]))
+		#darkList.append(darknessDur(cur,u,lab[2]))
 	cur.execute('SELECT hour,rate FROM {0}'.format(user) )
 	rec += cur.fetchall()
-print(rec,len(rec))
+
+
+print(len(noiseList),len(rec))
+#noise = np.zeros((len(noiseList,1)))
+
 sleep = np.array(rec)
 print(sleep)
+m = np.mean(moveList)
+for i in range(0,len(moveList)):
+	if moveList[i]>1000:
+		moveList[i] = m
 
 
-dfsleep = pd.DataFrame(sleep)
+last = np.column_stack((rec,noiseList,moveList))
+print('this is my list bitch')
+print(last)
 
-print(dfsleep.head())
+
+dfsleep = pd.DataFrame(last)
+dfsleep.to_csv('sleep.csv', sep='\t')
+
+print(dfsleep.head(10))
+ax = sns.factorplot(x=0,y=3,data=dfsleep)
+x=[0,1,2,3]
+time1 = ['Very good','Fairly good', 'Fairly bad', 'Very bad']
+pyp.xticks(x, time1)
+pyp.ylabel('Movement during night')
+pyp.xlabel('Rate of sleep')
+ax.savefig('sleep_hour_move.png')
+#fig = ax.get_figure()
+#fig.savefig('sleep_rate_move.png')
+
+"""
 
 ax = sns.boxplot(x=1,y=0,data=dfsleep)
 x=[0,1,2,3]
@@ -41,7 +159,7 @@ pyp.ylabel('Hours slept')
 pyp.xlabel('Rate of sleep')
 fig = ax.get_figure()
 fig.savefig('sleep_rate_hour.png')
-"""
+
 
 sns.set_style('darkgrid')
 fi = np.load('featimpor.npy')
