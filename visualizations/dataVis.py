@@ -4,6 +4,8 @@ import seaborn as sns
 import pandas as pd
 import psycopg2,random
 import datetime as dt
+from geopy.distance import great_circle
+
 from unbalanced_dataset import UnderSampler
 from sklearn.cluster import KMeans
 import datetime
@@ -59,6 +61,7 @@ def audioEpochFeats(cur,uid,timestamp):
 				noise += 1
 
 	return(noise)
+
 #connecting to database
 def actEpochFeats(cur,uid,timestamp):
 	uidA = uid +'act'	
@@ -96,6 +99,56 @@ def convEpochFeats(cur,uid,timestamp):
 			totalConvTimeN += records[i][1]-records[i][0]
 	return(totalConvsNight)
 
+
+
+def gpsFeats(cur,uid,timestamp):
+	# number of clusters as defined by DBSCAN: 14 + 1 for out of town
+	# p will hold the percentage of time spent during previous day in each cluster 
+	#variances = np.zeros(2)
+	cur.execute("SELECT time_stamp,latitude,longitude FROM {0} WHERE time_stamp>= {1} AND time_stamp<={2}".format(uid+'gpsdata',timestamp-86400,timestamp))
+	records = cur.fetchall()
+	total_dist_trav=0
+
+	if not records:
+		return(np.zeros(1))
+	t = [item[0] for item in records]
+
+	timeEpochs = epochCalc(t)
+	for i in range(1,len(records)):
+		#print(records[i][1],records[i][2])
+		# if user is in campus assign him to one of 14 clusters
+		# otherwise assign to 15th cluster which stands for 'out-of-town'
+		if (records[i][1] > 43.60 and records[i][1] <43.75 and records[i][2] > -72.35 and records[i][2] < -72.2):
+			# for every gps coordinate pair calculate the distance from cluster
+			# centers and assign to the nearest	
+			#print(records[i][1:3],records[i-1][1:3])
+			if timeEpochs[i][0] =='night':
+				total_dist_trav += great_circle(records[i][1:3],records[i-1][1:3]).meters
+
+	return total_dist_trav
+
+
+def chargeDur(cur,uid,timestamp):
+	totalDur = 0
+	uidC = uid+'charge'
+	#Getting data from database within day period
+	cur.execute('SELECT * FROM {0} WHERE start_timestamp>={1} AND end_timestamp<={2}'.format(uidC, timestamp-86400, timestamp) )
+	records = cur.fetchall()
+
+	#timeEpochs holds tuples of timestamps and their according epochs
+	tStart = [item[0] for item in records]
+#	tStop = [item[1] for item in records]
+	timeEpochs = epochCalc(tStart)
+	#timeEpochs1 = epochCalc(tStop)
+
+
+	for i in range(0,len(records)):
+		if timeEpochs[i][0]=='night' or timeEpochs[i][0]=='evening' :
+			totalDur += records[i][1] - records[i][0]
+
+	return totalDur
+
+
 try:
 	con = psycopg2.connect(database='dataset', user='tabrianos')
 	cur = con.cursor()
@@ -108,6 +161,8 @@ noiseList=[]
 moveList=[]
 convList =[]
 darkList=[]
+distList=[]
+chargeList=[]
 for u in uids1:
 	user = u+'sleep'
 	cur.execute('SELECT hour,rate,time_stamp FROM {0}'.format(user) )
@@ -115,8 +170,10 @@ for u in uids1:
 	for lab in temp:
 		#noiseList.append(audioEpochFeats(cur,u,lab[2]))
 		#moveList.append(actEpochFeats(cur,u,lab[2]))
-		convList.append(convEpochFeats(cur,u,lab[2]))
+		#convList.append(convEpochFeats(cur,u,lab[2]))
 		#darkList.append(darknessDur(cur,u,lab[2]))
+		#distList.append(gpsFeats(cur,u,lab[2]))
+		chargeList.append(chargeDur(cur,u,lab[2]))
 	cur.execute('SELECT hour,rate FROM {0}'.format(user) )
 	rec += cur.fetchall()
 
@@ -132,24 +189,24 @@ print(sleep)
 	#	moveList[i] = m
 
 
-last = np.column_stack((rec,convList))
+last = np.column_stack((rec,chargeList))
 print('this is my list bitch')
 print(last)
 
 
 dfsleep = pd.DataFrame(last)
-dfsleep.to_csv('sleepconv.csv', sep='\t')
+dfsleep.to_csv('sleepdist.csv', sep='\t')
 
 print(dfsleep.head(10))
-ax = sns.factorplot(x=1,y=2,data=dfsleep,color='red')
+ax = sns.violinplot(x=1,y=0,data=dfsleep)
 x=[0,1,2,3]
 time1 = ['Very good','Fairly good', 'Fairly bad', 'Very bad']
 pyp.xticks(x, time1)
-pyp.ylabel('Conversations duration during evening')
+pyp.ylabel('Hours slept')
 pyp.xlabel('Rate of sleep')
-ax.savefig('sleep_rate_convevening.png')
-#fig = ax.get_figure()
-#fig.savefig('sleep_rate_move.png')
+#ax.savefig('sleep_rate_chargeperiod.png')
+fig = ax.get_figure()
+fig.savefig('sleep_rate_chargeperiod.png')
 
 """
 
