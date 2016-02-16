@@ -5,12 +5,17 @@ import pandas as pd
 import psycopg2,random
 import datetime as dt
 from geopy.distance import great_circle
-
+from matplotlib import colors
+import six
+from scipy.interpolate import spline
 from unbalanced_dataset import UnderSampler
 from sklearn.cluster import KMeans
 import datetime
 uids1=['u44','u24','u08','u51','u59','u57','u00','u02','u52','u10','u32','u33','u43','u49','u16','u19']
-uids2=['u44']
+uids2=['u44','u59','u00','u44']
+uids = ['u00','u01','u02','u03','u04','u05','u07','u08','u09','u10','u12','u14','u15','u16','u17','u18','u19','u20','u22','u23','u24',
+'u25','u27','u30','u31','u32','u33','u34','u35','u36','u39','u41','u42','u43','u44','u45','u46','u47','u49','u50','u51','u52','u53','u54',
+'u56','u57','u58','u59']
 
 def unixTimeConv(timestamps):
 	""" converts unix timestamp to human readable date 
@@ -149,12 +154,46 @@ def chargeDur(cur,uid,timestamp):
 	return totalDur
 
 
+
 try:
 	con = psycopg2.connect(database='dataset', user='tabrianos')
 	cur = con.cursor()
 except psycopg2.DatabaseError as err:
 	print('Error %s' % err)
 	exit()
+
+allstress = np.zeros((len(uids1),100))
+
+i=0
+colors = list(six.iteritems(colors.cnames))
+for u in uids1:
+	cur.execute("SELECT stress_level  FROM {0} ".format(u))
+	records = cur.fetchall()
+	#print(records)
+	x = [ind for ind,ele in enumerate(records)]
+	xnew = np.linspace(x[0], x[-1], 100)
+	records = spline(x,records,xnew)
+	allstress[i,:] = np.asarray(records).reshape(100)
+	print(len(xnew), len(records))
+	#pyp.subplot(4,1,i)
+	#pyp.plot(xnew,records)
+	i+=1
+#pyp.xlim(0,100)
+#pyp.title('Self perceived stress reports of u59') 
+#pyp.savefig('stress_time_all.png')
+
+mean_stress = np.mean(allstress,axis=0)
+print(mean_stress.shape)
+mean_smooth = np.convolve(mean_stress,np.ones(5)/5,'valid')
+pyp.plot(mean_smooth)
+pyp.title('Mean value of stress reports among 16 students') 
+pyp.savefig('meansmooth.png')
+
+
+
+
+
+"""
 
 rec=[]
 noiseList=[]
@@ -208,7 +247,6 @@ pyp.xlabel('Rate of sleep')
 fig = ax.get_figure()
 fig.savefig('sleep_rate_chargeperiod.png')
 
-"""
 
 ax = sns.boxplot(x=1,y=0,data=dfsleep)
 x=[0,1,2,3]
