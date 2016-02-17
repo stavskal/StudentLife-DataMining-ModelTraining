@@ -39,6 +39,7 @@ def epochCalc(timestamps):
 		and returns (epoch,time) tuple
 	"""
 	splitTimes = unixTimeConv(timestamps)
+
 	epochTimes = []
 	for i in range(0,len(splitTimes)):
 		hour=int(splitTimes[i,3])
@@ -51,6 +52,25 @@ def epochCalc(timestamps):
 		epochTimes.append((epoch,splitTimes[i,6]))
 	return epochTimes
 
+def epoch(timestamp):
+	""" converts timestamp to epoch (day,evening,night) 
+		and returns (epoch,time) tuple
+	"""
+
+	newTime = str(datetime.datetime.fromtimestamp(int(timestamp)))
+	yearDate,timeT = newTime.split(' ')
+	year,month,day = str(yearDate).split('-')
+	hour,minutes,sec = timeT.split(':')
+
+	if hour >10 and hour <=18:
+		epoch='day'
+	elif hour >0 and hour<=10:
+		epoch='night'
+	else:
+		epoch='evening'
+
+	return epoch
+
 def audioEpochFeats(cur,uid,timestamp):
 	uidA = uid +'audio'	
 	noise = 0
@@ -61,9 +81,8 @@ def audioEpochFeats(cur,uid,timestamp):
 	timeEpochs = (epochCalc(tStart)) 
 
 	for i in range(0,len(records)):
-		if timeEpochs[i][0]=='evening' or timeEpochs[i][0]=='night':
-			if records[i][1]==2:
-				noise += 1
+		if records[i][1]==2:
+			noise += 1
 
 	return(noise)
 
@@ -78,9 +97,8 @@ def actEpochFeats(cur,uid,timestamp):
 	timeEpochs = (epochCalc(tStart)) 
 
 	for i in range(0,len(records)):
-		if timeEpochs[i][0]=='night':
-			if records[i][1]==1 or records[i][1]==2:
-				movement += 1
+		if records[i][1]==1 or records[i][1]==2:
+			movement += 1
 	return(movement)
 
 def convEpochFeats(cur,uid,timestamp):
@@ -99,9 +117,8 @@ def convEpochFeats(cur,uid,timestamp):
 	timeEpochs1 = epochCalc(tStop)
 
 	for i in range(0,len(records)):
-		if timeEpochs[i][0] in ['evening']:
-			totalConvsNight += 1 
-			totalConvTimeN += records[i][1]-records[i][0]
+		totalConvsNight += 1 
+		totalConvTimeN += records[i][1]-records[i][0]
 	return(totalConvsNight)
 
 
@@ -146,13 +163,37 @@ def chargeDur(cur,uid,timestamp):
 	timeEpochs = epochCalc(tStart)
 	#timeEpochs1 = epochCalc(tStop)
 
-
 	for i in range(0,len(records)):
-		if timeEpochs[i][0]=='night' or timeEpochs[i][0]=='evening' :
-			totalDur += records[i][1] - records[i][0]
+		totalDur += records[i][1] - records[i][0]
 
 	return totalDur
 
+def darknessDur(cur,uid,timestamp):
+	totalDur = 0
+	uidC = uid+'dark'
+	#Getting data from database within day period
+	cur.execute('SELECT * FROM {0} WHERE timeStart>={1} AND timeStop<={2}'.format(uidC, timestamp-86400, timestamp) )
+	records = cur.fetchall()
+
+	#timeEpochs holds tuples of timestamps and their according epochs
+	tStart = [item[0] for item in records]
+#	tStop = [item[1] for item in records]
+	timeEpochs = epochCalc(tStart)
+	#timeEpochs1 = epochCalc(tStop)
+
+	for i in range(0,len(records)):
+		totalDur += records[i][1] - records[i][0]
+
+	return totalDur
+
+def my_group(x):
+	if x>=3 and x<6: 
+		x=1
+	elif x>=6 and x<9:
+		x=2
+	else:
+		x=3
+	return x
 
 
 try:
@@ -161,6 +202,104 @@ try:
 except psycopg2.DatabaseError as err:
 	print('Error %s' % err)
 	exit()
+
+
+rec=[]
+noiseList=[]
+moveList=[]
+convList =[]
+darkList=[]
+distList=[]
+chargeList=[]
+for u in uids1:
+	user = u+'sleep'
+	cur.execute('SELECT time_stamp,hour,rate FROM {0}'.format(user) )
+	temp = cur.fetchall()
+	for lab in temp:
+		noiseList.append(audioEpochFeats(cur,u,lab[0]))
+		moveList.append(actEpochFeats(cur,u,lab[0]))
+		convList.append(convEpochFeats(cur,u,lab[0]))
+		darkList.append(darknessDur(cur,u,lab[0]))
+		distList.append(gpsFeats(cur,u,lab[0]))
+		chargeList.append(chargeDur(cur,u,lab[0]))
+	#cur.execute('SELECT hour,rate FROM {0}'.format(user) )
+	rec += temp
+
+
+#print(len(noiseList),len(rec))
+#noise = np.zeros((len(noiseList,1)))
+
+sleep = np.array(rec)
+print(sleep)
+#m = np.mean(moveList)
+#for i in range(0,len(moveList)):
+#	if moveList[i]>1000:
+	#	moveList[i] = m
+
+
+last = np.column_stack((rec,chargeList,moveList,convList,darkList,distList))
+print('this is my list bitch')
+print(last)
+
+#cols =['Timestamp','Hours','Rate']
+dfsleep = pd.DataFrame(last)
+dfsleep.to_csv('sleepfeats2.csv', sep='\t')
+exit()
+
+#last = np.column_stack((rec,chargeList,moveList,convList,darkList,distList))
+
+df = pd.read_csv('sleepfeats.csv', sep='\t', index_col=[0])
+df.index = pd.to_datetime(df.index,unit='s')
+df = df.sort(['1'])
+print(df.head(20))
+# good sleep : 1  
+# bad sleep : 2
+df['2'] = df['2'].map({1: 'good', 2:'good', 3:'bad', 4:'bad'})
+df['1'] = df['1'].apply(lambda x: my_group(x))
+#df = df.groupby(pd.cut(df['1'], np.arange(3,12.1,3)))
+print(df[80:90])
+#print(df.tail(30))
+exit()
+#df = df.loc[df['4']<1000]
+ax = sns.boxplot(y='5',x='epoch', hue='2',data=df)
+pyp.title('Comparing hours slept,rate and conversation')
+pyp.xlabel('Hours slept')
+x=[0,1,2]
+#time1 = ['3-6','6-9', '9-12']
+#pyp.xticks(x,time1)
+pyp.ylabel('distance')
+#pyp.savefig('joint.png')
+fig = ax.get_figure()
+fig.savefig('hours_rate_conversation2.png')
+
+
+
+
+
+"""
+X = np.load('plotdata/epochFeats.npy')
+y = np.load('plotdata/epochLabels.npy')
+
+first_four = X[1:X.shape[0]/2.5,:]
+rest = X[(X.shape[0]/2.5):-1,:]
+
+mean_feat_four = np.mean(first_four,axis=0)
+
+mean_feat_rest = np.mean(rest,axis=0)
+
+
+for u in uids1:
+	cur.execute("SELECT stress_level  FROM {0} ".format(u))
+	records = cur.fetchall()
+
+	user = u+'sleep'
+	cur.execute('SELECT hour FROM {0}'.format(user) )
+	records1 = cur.fetchall()
+
+	print(len(records), len(records1))
+
+#print(mean_feat_rest.shape, mean_feat_four.shape)
+
 
 allstress = np.zeros((len(uids1),100))
 
@@ -185,15 +324,13 @@ for u in uids1:
 mean_stress = np.mean(allstress,axis=0)
 print(mean_stress.shape)
 mean_smooth = np.convolve(mean_stress,np.ones(5)/5,'valid')
-pyp.plot(mean_smooth)
-pyp.title('Mean value of stress reports among 16 students') 
-pyp.savefig('meansmooth.png')
+#pyp.plot(mean_smooth)
+#pyp.title('Mean value of stress reports among 16 students') 
+#pyp.savefig('meansmooth.png')
 
 
 
 
-
-"""
 
 rec=[]
 noiseList=[]
