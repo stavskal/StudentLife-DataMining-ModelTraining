@@ -119,6 +119,11 @@ class OneHotTimeSeries(object):
 		print(self.tuple_ts[:,200])
 
 	def one_hot_encode(self):
+		"""
+		Converts tuple timeseries to one hot encoding mapping
+		all possible N combinations of audio/activity classes
+		to 1-of-N vector  
+		"""
 		self.oht = np.zeros([9,8640])
 		for i in range(0,8640):
 			if self.tuple_ts[0,i]==0 and self.tuple_ts[1,i]==0:
