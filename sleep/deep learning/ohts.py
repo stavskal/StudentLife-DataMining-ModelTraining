@@ -1,6 +1,8 @@
 
 import datetime
 import psycopg2
+import numpy as np
+
 
 class OneHotTimeSeries(object):
 	""" Creates one hot encoded version of merged activity/audio
@@ -27,6 +29,7 @@ class OneHotTimeSeries(object):
 		self.response_ts = response_ts
 		self.set_period()
 		self.data_retrieval()
+		self.align_timeseries()
 
 	def set_period(self):
 		"""
@@ -38,20 +41,72 @@ class OneHotTimeSeries(object):
 		newTime = str(datetime.datetime.fromtimestamp(self.response_ts))
 		print(newTime)
 		yearDate,timeT = newTime.split(' ')
-		year,month,day = str(yearDate).split('-')
+		#year,month,day = str(yearDate).split('-')
 		hour,minutes,sec = timeT.split(':')
 		# Converting from UTC+2 to UTC-4
 		hour = int(hour)-6
-		print(int(minutes))
+	#	print(int(minutes))
 		self.am10 = self.response_ts - (int(hour)-10)*3600 - int(minutes)*60
 		self.pm10 = self.response_ts - (int(hour)+2)*3600 - int(minutes)*60
 		print(self.am10,self.pm10)
 
 	def data_retrieval(self):
+		"""
+		Retrieves activity/audio inference list from local database between 22:00 and 10:00
+		accompanied by thei corresponding timestamps in the form of tuples
+		Cell 0: timestamp
+		Cell 1: activity/inference
+		Then stores them as dictionary with timestamps as keys
+		"""
+
 		self.cur.execute('SELECT * FROM {0} WHERE time_stamp>={1} AND time_stamp<={2}'
 			.format(self.user+'act', self.pm10, self.am10) )
 		records = self.cur.fetchall()
-		print(len(records))
+		self.activity_ts = {timestamp: inference for timestamp,inference in records}
+
+		self.cur.execute('SELECT * FROM {0} WHERE time_stamp>={1} AND time_stamp<={2}'
+			.format(self.user+'audio', self.pm10, self.am10) )
+		records = self.cur.fetchall()
+		self.audio_ts = {timestamp: inference for timestamp,inference in records}
+
+
+	def align_timeseries(self):
+		"""
+		Creates tuple time series with fixed length containing
+		(activity,audio) data for every timestemp. Step in time is
+		5 seconds atm
+		"""
+		print(self.pm10,self.am10)
+		tuple_ts = np.zeros([2,8640])
+		current_time = self.pm10
+		time_list_ac = np.array(self.activity_ts.keys())
+		time_list_au = np.array(self.audio_ts.keys())
+		
+		distances_ac = np.zeros(8640)
+		distances_au = np.zeros(8640)
+		for i in range(0,8640):
+			#Find position and value of nearest inference to time step
+			diff_ac = np.abs(time_list_ac-current_time)
+			diff_au = np.abs(time_list_au-current_time)
+
+			nearest_ac_inference = np.argmin(diff_ac)
+			nearest_au_inference = np.argmin(diff_au)
+			# Keeping error for evaluation purposes
+			distances_ac[i] = (time_list_ac[nearest_ac_inference]-current_time)
+			distances_au[i] = (time_list_au[nearest_au_inference]-current_time)
+			# Timelist[nearest] is the nearest timestamp, which is also the key
+			# to get the inference from activity/audio_(ts)
+			tuple_ts[0,i] = self.activity_ts[time_list_ac[nearest_ac_inference]]
+			tuple_ts[1,i] = self.audio_ts[time_list_au[nearest_au_inference]]
+		
+			current_time += 5
+		
+		print(np.mean(distances_ac), np.median(distances_ac))
+		print(np.mean(distances_au), np.median(distances_au))
+
+
+
+
 
 
 
@@ -64,4 +119,5 @@ except psycopg2.DatabaseError as err:
 	print('Error %s' % err)
 	exit()
 
-a = OneHotTimeSeries(cur=cur, user='u00', response_ts=1366488754, rate=1)
+a = OneHotTimeSeries(cur=cur, user='u00', response_ts=1366655156, rate=1)
+print(a.am10-a.pm10)
